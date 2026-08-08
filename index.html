@@ -113,7 +113,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Ночная смена">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <script>window.__APP_VER = "61a78446a3";</script>
+  <script>window.__APP_VER = "e3c256e888";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -532,8 +532,7 @@ const hatches = [];
     new THREE.MeshStandardMaterial({ color: real ? 0x2f4f3a : 0x4a3b2a, roughness:0.9, metalness:0.4 }));
   grid.position.y = 0.09; g.add(grid);
   // маркировка видна только в свете фонарика (пока просто тусклая)
-  const mark = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5),
-    emisM(real ? 0x35e07a : 0x8a4b2a, 0.25));
+  const mark = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), emisM(0x35e07a, 0.25));
   mark.rotation.x = -Math.PI/2; mark.position.y = 0.13; g.add(mark);
   // столбик рядом — чтобы люк было видно издалека (какой из них настоящий, столбик не выдаёт)
   const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,2.4,8), plastic(0xf59e0b,0.6));
@@ -549,18 +548,30 @@ const hatches = [];
   hatches.push({ x, z, real, mark, beacon, used:false });
 });
 
-/* ---------- 💧 лужи: в них бег проседает, но их можно перепрыгнуть ---------- */
+/* ---------- 💧 лужи: в них бег проседает, но их можно перепрыгнуть ----------
+   Появляются НЕ сразу: ночь портится постепенно, сбой за сбоем. */
 const puddles = [];
-[[-24,-32],[4,-24],[-14,-8],[20,-6],[-30,14],[12,10],[-6,24],[26,20],[-18,36],[8,34]].forEach(([x,z]) => {
+function addPuddle(x, z) {
   const r = 2.0 + Math.random()*1.4;
+  const g = new THREE.Group();
   const m = new THREE.Mesh(new THREE.CircleGeometry(r, 22),
-    new THREE.MeshStandardMaterial({ color:0x2f6f8f, roughness:0.08, metalness:0.7, transparent:true, opacity:0.72 }));
-  m.rotation.x = -Math.PI/2; m.position.set(x, 0.02, z); store.add(m);
+    new THREE.MeshStandardMaterial({ color:0x2f6f8f, roughness:0.08, metalness:0.7, transparent:true, opacity:0 }));
+  m.rotation.x = -Math.PI/2; m.position.y = 0.02; g.add(m);
   const rim = new THREE.Mesh(new THREE.RingGeometry(r-0.12, r, 22),
-    new THREE.MeshBasicMaterial({ color:0x7dd3fc, transparent:true, opacity:0.35, side:THREE.DoubleSide }));
-  rim.rotation.x = -Math.PI/2; rim.position.set(x, 0.03, z); store.add(rim);
-  puddles.push({ x, z, r });
-});
+    new THREE.MeshBasicMaterial({ color:0x7dd3fc, transparent:true, opacity:0, side:THREE.DoubleSide }));
+  rim.rotation.x = -Math.PI/2; rim.position.y = 0.03; g.add(rim);
+  g.position.set(x, 0, z); store.add(g);
+  const rec = { x, z, r, group:g, m, rim, fade:0 };       // растекается плавно
+  puddles.push(rec);
+  return rec;
+}
+function clearPuddles() { puddles.forEach(p => store.remove(p.group)); puddles.length = 0; }
+function updatePuddles(dt) {
+  for (const p of puddles) {
+    if (p.fade < 1) { p.fade = Math.min(1, p.fade + dt*0.8);
+      p.m.material.opacity = 0.72*p.fade; p.rim.material.opacity = 0.35*p.fade; }
+  }
+}
 function inPuddle(a) {
   if (a.y > 0.35) return false;                       // перепрыгнул — не считается
   for (const p of puddles) if (Math.hypot(a.x-p.x, a.z-p.z) < p.r) return true;
@@ -1154,8 +1165,50 @@ function closeStore() {
   }, 4600);
 }
 
+/* =========================================================================
+   ⚠️ СБОИ НАРАСТАЮТ: чем дольше длится ночь, тем хуже становится магазин
+   ========================================================================= */
+let hazardT = 0, hazards = 0;
+const HAZARD_EVERY = 22;
+
+function setHatchFake(h) {
+  h.real = false;
+  h.mark.material.color.setHex(0x8a4b2a);
+  h.mark.material.emissive.setHex(0x8a4b2a);
+  if (h.beacon) h.beacon.color.setHex(0xf87171);
+}
+function setHatchReal(h) {
+  h.real = true;
+  h.mark.material.color.setHex(0x35e07a);
+  h.mark.material.emissive.setHex(0x35e07a);
+  if (h.beacon) h.beacon.color.setHex(0xfbbf24);
+}
+
+function spawnHazard() {
+  hazards++;
+  const reals = hatches.filter(h => h.real);
+  // люк ломаем, только если после этого останется хотя бы два настоящих
+  const canBreak = reals.length > 2 && Math.random() < 0.45;
+  if (canBreak) {
+    const h = reals[Math.floor(Math.random()*reals.length)];
+    setHatchFake(h);
+    sfx('door'); noise(0.5, 0.18, 700);
+    bigMsg('🕳 ОДИН ИЗ ЛЮКОВ ЗАКЛИНИЛО', 2.2, '#fca5a5');
+    hint('Проверяй люки фонариком заново — какой-то из них теперь ловушка');
+  } else {
+    // лужа подальше от игрока, чтобы не возникала под ногами
+    let x, z, tries = 0;
+    do { x = (Math.random()-0.5)*(HALL.w-8); z = (Math.random()-0.5)*(HALL.d-8); tries++; }
+    while (tries < 30 && Math.hypot(x-player.x, z-player.z) < 12);
+    addPuddle(x, z);
+    noise(0.6, 0.14, 600);
+    bigMsg('💧 ГДЕ-ТО РАЗЛИЛОСЬ', 1.8, '#7dd3fc');
+  }
+}
+
 function goDark() {
   phase = 'night';
+  hazardT = HAZARD_EVERY;
   hemi.intensity = 0.10; sun.intensity = 0.04;
   scene.fog.near = 8; scene.fog.far = 42;
   startMusic('night');
@@ -1311,12 +1364,24 @@ function startGame() {
   setTorch(true);
   magnets = 0; robotStun = 0; updateMagBtn();
   magnetsOnFloor.forEach(m => { m.taken = false; m.mesh.visible = true; });
-  hatches.forEach(h => h.used = false);
+  hatches.forEach(h => { h.used = false; setHatchReal(h); });
+  setHatchFake(hatches[0]); setHatchFake(hatches[4]);   // с самого начала пара ловушек
+  clearPuddles();
+  addPuddle(-24, -32); addPuddle(12, 10);                // и всего две лужи
+  puddles.forEach(p => { p.fade = 1; p.m.material.opacity = 0.72; p.rim.material.opacity = 0.35; });
+  hazards = 0; hazardT = HAZARD_EVERY;
   $('scare').classList.add('hidden'); $('winScreen').classList.add('hidden');
   $('taskCard').textContent = 'Списки: 0 / 3';
   $('listCard').classList.add('hidden');
   hatches.forEach(h => h.mark.material.emissiveIntensity = 0.25);
   dropped.forEach(d => scene.remove(d.mesh)); dropped.length = 0;
+  // покупатели намусорили за день — роботу есть чем заняться
+  ['apple','banana','socks','battery','cap','lemon','shirt'].forEach((id, i) => {
+    const a = (i/7)*Math.PI*2 + 0.4, rad = 12 + (i%3)*9;
+    const x = Math.cos(a)*rad, z = Math.sin(a)*rad*1.2;
+    const m = makeItem(id); m.position.set(x, 0.05, z); scene.add(m);
+    dropped.push({ id, mesh:m, x, z });
+  });
   shelfItems.forEach(it => { it.taken = false; it.mesh.visible = true; });
   startMusic('day');
 
@@ -1437,8 +1502,9 @@ function updateRobot(dt) {
   else if (robot.seeT > 0) { robot.seeT -= dt; }
   else { robot.mode = 'patrol'; robot.target = null; }
 
-  // брошенный на пол товар: старая программа уборки уцелела — едет пылесосить
-  if (phase === 'night' && robot.mode !== 'chase' && dropped.length) {
+  // уборка мусора — его основная, ещё не сломанная программа.
+  // Днём это вся его работа, ночью — то, чем его можно отвлечь.
+  if (robot.mode !== 'chase' && dropped.length) {
     let bestD = null, bd = 1e9;
     for (const d of dropped) { const dd = Math.hypot(d.x-robot.x, d.z-robot.z); if (dd < bd) { bd = dd; bestD = d; } }
     if (bestD && bd < 40) {
@@ -1482,8 +1548,11 @@ function updateRobot(dt) {
   const chasing = robot.mode === 'chase';
   u.sirenL.material.emissiveIntensity = chasing ? 0.4 + Math.abs(Math.sin(time*8))*2.4 : 0.25;
   u.sirenR.material.emissiveIntensity = chasing ? 0.4 + Math.abs(Math.cos(time*8))*2.4 : 0.25;
-  u.eyes.forEach(e => e.material.emissiveIntensity = chasing ? 3.2 : 1.4);
-  u.cones.forEach(c => c.material.opacity = chasing ? 0.13 : 0.07);
+  u.eyes.forEach(e => e.material.emissiveIntensity = chasing ? 3.2 : (phase === 'night' ? 1.4 : 0.5));
+  // днём светло — фонарики выключены, он просто ездит и убирается
+  const dayNow = phase !== 'night';
+  u.lamps.forEach(L => L.intensity = dayNow ? 0 : 20);
+  u.cones.forEach(c => c.material.opacity = dayNow ? 0 : (chasing ? 0.13 : 0.07));
 
   // пылесос: вблизи включает всасывание и тянет к себе
   robot.sucking = false;
@@ -1623,6 +1692,7 @@ function loop(now) {
       if (robot) updateRobot(dt);
       updateTorch();
       updateFx(dt);
+      updatePuddles(dt);
       updateCamera(dt);
     }
     if (asRobot) { /* HUD рисует updateAsRobot */ }
@@ -1631,9 +1701,13 @@ function loop(now) {
       const m = Math.floor(Math.max(0,dayLeft)/60), sec = Math.floor(Math.max(0,dayLeft)%60);
       $('stateCard').textContent = '🕒 Магазин закроется через ' + m + ':' + String(sec).padStart(2,'0');
       if (dayLeft <= 0) closeStore();
-      $('radarCard').textContent = '🚨 Робот: спит на посту';
+      $('radarCard').textContent = robot && robot.mode === 'clean'
+        ? '🤖 Робот убирает мусор' : '🤖 Робот на обходе';
       updateHatchRadar();
     } else if (phase === 'night') {
+      // ночь портится постепенно: каждые 22 секунды новый сбой
+      hazardT -= dt;
+      if (hazardT <= 0) { hazardT = HAZARD_EVERY; spawnHazard(); }
       if (robot) {
         const dx = robot.x-player.x, dz = robot.z-player.z, d = Math.hypot(dx,dz);
         const ang = Math.atan2(dx, dz) - yaw;                 // куда он относительно взгляда
@@ -1644,7 +1718,7 @@ function loop(now) {
       }
       updateHatchRadar();
       $('stateCard').textContent =
-        !robot || robot.mode === 'patrol' ? '🌑 Магазин закрыт'
+        !robot || robot.mode === 'patrol' ? '🌑 Магазин закрыт · сбоев: ' + hazards
         : robot.mode === 'clean' ? '🗑 Он убирает мусор'
         : robot.target === player ? '🚨 ГОНИТСЯ ЗА ТОБОЙ'
         : '🚨 Кого-то заметил';
@@ -1711,8 +1785,16 @@ window.__dbg = {
   scan(){ doTake(); },
   get torch(){ return { on:torchOn, intensity:torch.intensity }; },
   get heading(){ return player.heading; },
+  get hazards(){ return hazards; },
+  get puddles(){ return puddles.length; },
+  get realHatches(){ return hatches.filter(h => h.real).length; },
+  get fakeHatches(){ return hatches.filter(h => !h.real).length; },
+  hazardNow(){ spawnHazard(); },
+  setHazardTimer(t){ hazardT = t; },
   get yaw(){ return yaw; },
   toggleTorch(){ setTorch(!torchOn); },
+  get trash(){ return dropped.length; },
+  get robotLamps(){ return robot ? robot.mesh.userData.lamps[0].intensity : null; },
   get magnets(){ return magnets; },
   get stun(){ return robotStun; },
   giveMagnet(){ magnets++; updateMagBtn(); },
