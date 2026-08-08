@@ -50,6 +50,9 @@
     font-weight:900; cursor:pointer; background:#ffffff1a; backdrop-filter:blur(3px); }
   .abtn:active { transform:translateY(3px); }
   #jumpBtn { background:linear-gradient(180deg,#7dd3fc,#0369a1); }
+  #runBtn { background:linear-gradient(180deg,#bef264,#4d7c0f); }
+  #runBtn.on { background:linear-gradient(180deg,#fde047,#ca8a04); box-shadow:0 0 18px #fde047aa;
+    border-color:#fde047; }
   #pushBtn { background:linear-gradient(180deg,#fca5a5,#b91c1c); font-size:20px; }
   #fsBtn { position:fixed; right:14px; top:14px; z-index:22; width:40px; height:40px; border-radius:12px;
     background:#00000088; border:1px solid #ffffff33; color:#fff; font-size:18px; cursor:pointer; }
@@ -108,12 +111,17 @@
 </style>
 
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+  <link rel="shortcut icon" type="image/png" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Ночная смена">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <script>window.__APP_VER = "e3c256e888";</script>
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png">
+  <meta name="msapplication-TileImage" content="icon-192.png">
+  <meta name="msapplication-TileColor" content="#6b21a8">
+  <script>window.__APP_VER = "413ae5ccb0";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -157,6 +165,7 @@
   <button class="abtn" id="listBtn" title="Список">📋</button>
   <button class="abtn" id="takeBtn" title="Взять / сканировать">✋</button>
   <button class="abtn" id="pushBtn" title="Толкнуть">🤚</button>
+  <button class="abtn" id="runBtn" title="Бег">🏃</button>
   <button class="abtn" id="jumpBtn" title="Прыжок">⤴</button>
   <button class="abtn hidden" id="magBtn" title="Магнит">🧲<span class="n">0</span></button>
   <button class="abtn hidden" id="vacBtn" title="Пылесос" style="background:linear-gradient(180deg,#c4b5fd,#6d28d9)">🌀</button>
@@ -751,6 +760,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyL' || e.code === 'Tab') { showList(4); e.preventDefault(); }
   if (e.code === 'KeyG') setTorch(!torchOn);
   if (e.code === 'KeyM') useMagnet();
+  if (e.code === 'KeyR') setRun(!runOn);
   if (e.code === 'Digit1') selectSlot(0);
   if (e.code === 'Digit2') selectSlot(1);
   if (e.code === 'Digit3') selectSlot(2);
@@ -799,6 +809,7 @@ $('pushBtn').addEventListener('click', doPush);
 $('takeBtn').addEventListener('click', doTake);
 $('listBtn').addEventListener('click', () => showList(4));
 $('magBtn').addEventListener('click', useMagnet);
+$('runBtn').addEventListener('click', () => setRun(!runOn));
 $('vacBtn').addEventListener('pointerdown', () => setVac(true));
 $('vacBtn').addEventListener('pointerup', () => setVac(false));
 $('vacBtn').addEventListener('pointerleave', () => setVac(false));
@@ -840,6 +851,13 @@ const ALL_IDS = Object.keys(ITEMS);
 function nearTill() {
   for (const t of tills) if (Math.hypot(t.x-player.x, t.z-player.z) < 4.2) return t;
   return null;
+}
+// днём кассы — просто мебель: они оживают, только когда магазин закрылся
+function tillWorks() {
+  if (phase === 'night') return true;
+  hint('Касса не работает — магазин ещё открыт');
+  sfx('drop');
+  return false;
 }
 function newTask() {
   const pool = ALL_IDS.slice();
@@ -933,6 +951,7 @@ function doTake() {
   if (state !== 'play') return;
   const till = nearTill();                             // касса важнее всего рядом
   if (till) {
+    if (!tillWorks()) return;
     if (!taskList) { newTask(); return; }
     scanAtTill(); return;
   }
@@ -1003,6 +1022,7 @@ function clickAt(px, py) {
     }
     if (kind === 'till') {
       if (d > 7) { hint('Далеко — подойди к кассе'); return; }
+      if (!tillWorks()) return;
       if (!taskList) newTask(); else scanAtTill();
       return;
     }
@@ -1012,6 +1032,14 @@ function clickAt(px, py) {
 /* =========================================================================
    ФОНАРИК — настоящий, светит туда, куда смотришь
    ========================================================================= */
+let runOn = false;
+function setRun(on) {
+  runOn = on;
+  $('runBtn').classList.toggle('on', on);
+  sfx('click');
+  hint(on ? '🏃 Бег включён — быстрее, но и шумнее' : '🚶 Обычный шаг');
+}
+
 let torchOn = true;
 const torch = new THREE.SpotLight(0xfff4d0, 0, 30, 0.42, 0.55, 1.2);
 torch.position.set(0, 1.7, 0); scene.add(torch); scene.add(torch.target);
@@ -1351,6 +1379,7 @@ function startGame() {
   $('listBtn').classList.toggle('hidden', asRobot);
   $('jumpBtn').classList.toggle('hidden', asRobot);
   $('pushBtn').classList.toggle('hidden', asRobot);
+  $('runBtn').classList.toggle('hidden', asRobot);
   $('batWrap').style.display = asRobot ? 'block' : 'none';
   $('hearts').style.display = asRobot ? 'none' : 'block';
   goFullscreen();
@@ -1362,6 +1391,7 @@ function startGame() {
   bag[0] = bag[1] = bag[2] = null; slot = 0; drawInv();
   taskList = null; listsDone = 0; exitOpen = false;
   setTorch(true);
+  setRun(false);
   magnets = 0; robotStun = 0; updateMagBtn();
   magnetsOnFloor.forEach(m => { m.taken = false; m.mesh.visible = true; });
   hatches.forEach(h => { h.used = false; setHatchReal(h); });
@@ -1551,6 +1581,8 @@ function updateRobot(dt) {
   u.eyes.forEach(e => e.material.emissiveIntensity = chasing ? 3.2 : (phase === 'night' ? 1.4 : 0.5));
   // днём светло — фонарики выключены, он просто ездит и убирается
   const dayNow = phase !== 'night';
+  tills.forEach(t => { t.screen.material.emissiveIntensity = dayNow ? 0.15 : 1.2;
+                       t.screen.material.color.setHex(dayNow ? 0x334155 : 0x35e07a); });
   u.lamps.forEach(L => L.intensity = dayNow ? 0 : 20);
   u.cones.forEach(c => c.material.opacity = dayNow ? 0 : (chasing ? 0.13 : 0.07));
 
@@ -1605,7 +1637,8 @@ function updateActor(a, dt) {
     if (stickId !== null) { mx += stickVec.x; mz += stickVec.y; }
     const l = Math.hypot(mx,mz); if (l > 1) { mx/=l; mz/=l; }
 
-    const running = keys.ShiftLeft || keys.ShiftRight || Math.hypot(stickVec.x,stickVec.y) > 0.75;
+    // бег: кнопкой-переключателем 🏃, либо зажатым Shift, либо джойстиком до упора
+    const running = runOn || keys.ShiftLeft || keys.ShiftRight || Math.hypot(stickVec.x,stickVec.y) > 0.75;
     let sp = ((l || thr) ? (running ? CFG.run : CFG.walk) : 0);
     if (inPuddle(a)) { sp *= 0.42; a.wet = 0.6; }        // 💧 в луже вязнешь
     else if (a.wet > 0) a.wet -= dt;
@@ -1794,6 +1827,8 @@ window.__dbg = {
   get yaw(){ return yaw; },
   toggleTorch(){ setTorch(!torchOn); },
   get trash(){ return dropped.length; },
+  get run(){ return runOn; },
+  toggleRun(){ setRun(!runOn); },
   get robotLamps(){ return robot ? robot.mesh.userData.lamps[0].intensity : null; },
   get magnets(){ return magnets; },
   get stun(){ return robotStun; },

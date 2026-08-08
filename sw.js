@@ -1,7 +1,7 @@
-// service worker «Ночная смена» — версия по содержимому: e3c256e888
+// service worker «Ночная смена» — версия по содержимому: 413ae5ccb0
 // Игра всегда отдаётся МГНОВЕННО из памяти телефона (и работает без интернета).
 // Новая версия скачивается фоном при следующем заходе и применяется сама.
-const CACHE = 'nightshift-e3c256e888';
+const CACHE = 'nightshift-413ae5ccb0';
 const ASSETS = ['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-512-maskable.png','./apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
