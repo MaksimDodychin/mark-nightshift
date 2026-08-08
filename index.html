@@ -113,7 +113,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Ночная смена">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <script>window.__APP_VER = "eafc34b940";</script>
+  <script>window.__APP_VER = "61a78446a3";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -220,6 +220,7 @@ const CFG = {
   suckDist: 5.5, suckPull: 5.0,
   catchDist: 1.5,
   pushDist: 2.2, pushForce: 9,
+  turnSpeed: 2.6,               // как быстро стрелки ←→ разворачивают героя
 };
 const HALL = { w: 72, d: 88, h: 8 };   // большой торговый зал
 
@@ -732,6 +733,7 @@ const keys = {};
 addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'Space') { doJump(); e.preventDefault(); }
+  if (e.code.startsWith('Arrow')) e.preventDefault();
   if (e.code === 'KeyE') doTake();
   if (e.code === 'KeyF') doPush();
   if (e.code === 'KeyQ') doDrop();
@@ -1339,7 +1341,7 @@ function startGame() {
     scene.remove(player.mesh); actors.splice(actors.indexOf(player), 1);
     hint('Ты Робот-Дефект. 🌀 — пылесос (жрёт батарею). Поймай всех за 3 минуты.');
   }
-  hint('Кликай мышкой по товару — он в инвентаре. По кассе — тоже кликом. WASD, Shift — бег, Пробел — прыжок');
+  hint('Стрелки: ↑↓ идти, ←→ поворачиваться. Или WASD + мышь. Клик по товару — взять. Shift — бег, Пробел — прыжок');
 }
 
 function scream() {
@@ -1516,24 +1518,45 @@ function updateActor(a, dt) {
     return;
   }
   if (a.isPlayer) {
+    // ── СТРЕЛКИ: танковое управление, как в «Паучьем лабиринте» ──
+    // ↑↓ едешь вперёд-назад, ←→ поворачивают тебя, камера идёт за спиной
+    let thr = 0, turn = 0;
+    if (keys.ArrowUp)    thr += 1;
+    if (keys.ArrowDown)  thr -= 1;
+    if (keys.ArrowLeft)  turn -= 1;
+    if (keys.ArrowRight) turn += 1;
+    const tank = thr !== 0 || turn !== 0;
+
+    // ── WASD и джойстик: движение относительно камеры ──
     let mx = 0, mz = 0;
-    if (keys.KeyW || keys.ArrowUp) mz -= 1;
-    if (keys.KeyS || keys.ArrowDown) mz += 1;
-    if (keys.KeyA || keys.ArrowLeft) mx -= 1;
-    if (keys.KeyD || keys.ArrowRight) mx += 1;
+    if (keys.KeyW) mz -= 1;
+    if (keys.KeyS) mz += 1;
+    if (keys.KeyA) mx -= 1;
+    if (keys.KeyD) mx += 1;
     if (stickId !== null) { mx += stickVec.x; mz += stickVec.y; }
     const l = Math.hypot(mx,mz); if (l > 1) { mx/=l; mz/=l; }
+
     const running = keys.ShiftLeft || keys.ShiftRight || Math.hypot(stickVec.x,stickVec.y) > 0.75;
-    let sp = (l ? (running ? CFG.run : CFG.walk) : 0);
+    let sp = ((l || thr) ? (running ? CFG.run : CFG.walk) : 0);
     if (inPuddle(a)) { sp *= 0.42; a.wet = 0.6; }        // 💧 в луже вязнешь
     else if (a.wet > 0) a.wet -= dt;
-    // камера смотрит вдоль (sin yaw, cos yaw); вправо от неё — (-cos yaw, sin yaw)
-    const sin = Math.sin(yaw), cos = Math.cos(yaw);
-    const wx = sin*(-mz) - cos*mx;
-    const wz = cos*(-mz) + sin*mx;
+
+    let wx, wz;
+    if (tank) {
+      a.heading -= turn * CFG.turnSpeed * dt;            // стрелками крутишь себя
+      const d = ((a.heading - yaw + Math.PI*3) % (Math.PI*2)) - Math.PI;
+      yaw += d * Math.min(1, dt*7);                       // камера доворачивает за спину
+      wx = Math.sin(a.heading) * thr;
+      wz = Math.cos(a.heading) * thr;
+    } else {
+      // камера смотрит вдоль (sin yaw, cos yaw); вправо от неё — (-cos yaw, sin yaw)
+      const sin = Math.sin(yaw), cos = Math.cos(yaw);
+      wx = sin*(-mz) - cos*mx;
+      wz = cos*(-mz) + sin*mx;
+      if (l) a.heading = Math.atan2(wx, wz);
+    }
     a.vx += (wx*sp - a.vx) * Math.min(1, dt*10);
     a.vz += (wz*sp - a.vz) * Math.min(1, dt*10);
-    if (l) a.heading = Math.atan2(wx, wz);
     a.speed = sp;
   } else {
     // покупатели: бродят, а увидев робота рядом — в панике убегают
@@ -1643,7 +1666,7 @@ function goFullscreen() {
 }
 $('ctrlHint').textContent = isTouch
   ? 'Телефон: джойстик — идти, палец — камера. Тапни по товару — он в инвентаре, тапни по кассе — список и скан. 🔦 включает фонарик'
-  : 'ПК: WASD — идти, Shift — бег, Пробел — прыжок. Клик по товару — взять, клик по кассе — список и скан. G — фонарик, F — толкнуть, Q — выбросить';
+  : 'ПК: стрелки ↑↓←→ (как в Паучьем лабиринте) или WASD + мышь. Shift — бег, Пробел — прыжок. Клик по товару — взять, по кассе — список и скан. G — фонарик, F — толкнуть, Q — выбросить';
 $('startBtn').addEventListener('click', startGame);
 $('fsBtn').addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen();
@@ -1687,6 +1710,8 @@ window.__dbg = {
   fillBag(ids){ for (let i=0;i<3;i++) bag[i] = ids[i] || null; drawInv(); },
   scan(){ doTake(); },
   get torch(){ return { on:torchOn, intensity:torch.intensity }; },
+  get heading(){ return player.heading; },
+  get yaw(){ return yaw; },
   toggleTorch(){ setTorch(!torchOn); },
   get magnets(){ return magnets; },
   get stun(){ return robotStun; },
