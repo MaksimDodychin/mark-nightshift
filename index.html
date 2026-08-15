@@ -29,6 +29,24 @@
     transition:transform .08s; letter-spacing:1px; }
   .btn:active { transform:translateY(3px); box-shadow:0 3px 0 #4c1d95, 0 6px 14px #0007; }
 
+  /* 🛒 магазин улучшений */
+  #shop { z-index:60; justify-content:flex-start; overflow-y:auto; gap:10px; }
+  #shopList { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:9px;
+    width:min(900px,96vw); }
+  .upg { display:flex; align-items:center; gap:10px; background:#ffffff0e; border:1px solid #ffffff1f;
+    border-radius:14px; padding:9px 11px; text-align:left; }
+  .upg .em { font-size:26px; }
+  .upg .info { flex:1; min-width:0; }
+  .upg .nm { font-weight:900; font-size:14px; }
+  .upg .ds { font-size:11.5px; opacity:.75; line-height:1.35; }
+  .upg .pips { letter-spacing:2px; font-size:13px; color:#ffd24a; }
+  .upg button { cursor:pointer; border:none; border-radius:11px; padding:9px 12px; font-weight:900; font-size:13px;
+    background:linear-gradient(180deg,#fde68a,#b45309); color:#2a1500; box-shadow:0 4px 0 #78350f; white-space:nowrap; }
+  .upg button:disabled { background:#ffffff18; color:#ffffff66; box-shadow:none; cursor:default; }
+  .shopHead { display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:center; }
+  .shopTitle { font-weight:900; font-size:13px; opacity:.75; letter-spacing:2px; width:100%; text-align:left;
+    margin-top:6px; color:#c9a6ff; }
+  #coinCard { color:#ffd24a; }
   #hud { position:fixed; top:0; left:0; right:0; z-index:12; display:flex; justify-content:space-between;
     align-items:flex-start; padding:10px 12px; pointer-events:none; gap:10px; }
   .card { background:#000000aa; border:1px solid #ffffff1c; border-radius:12px; padding:7px 13px; font-weight:800; font-size:15px; }
@@ -121,7 +139,7 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png">
   <meta name="msapplication-TileImage" content="icon-192.png">
   <meta name="msapplication-TileColor" content="#6b21a8">
-  <script>window.__APP_VER = "413ae5ccb0";</script>
+  <script>window.__APP_VER = "c6ff149d7b";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -145,7 +163,24 @@
   </div>
   <button class="btn" id="startBtn">В МАГАЗИН</button>
   <button class="btn hidden" id="robotBtn" style="background:linear-gradient(180deg,#fca5a5,#b91c1c);box-shadow:0 6px 0 #7f1d1d,0 12px 24px #0007">🤖 ИГРАТЬ ЗА РОБОТА-ДЕФЕКТА</button>
+  <button class="btn" id="shopBtn" style="background:linear-gradient(180deg,#fde68a,#b45309);box-shadow:0 6px 0 #78350f,0 12px 24px #0007;color:#2a1500">🛒 УЛУЧШЕНИЯ · <span id="menuCoins">0</span> 🪙</button>
   <div class="sub" style="font-size:12px;opacity:.7" id="ctrlHint"></div>
+</div>
+
+<!-- 🛒 магазин улучшений -->
+<div id="shop" class="screen hidden">
+  <h1 style="color:#ffd24a;font-size:clamp(22px,5vw,40px)">МАГАЗИН УЛУЧШЕНИЙ</h1>
+  <div class="shopHead">
+    <div class="card" style="color:#ffd24a">🪙 Монет: <b id="shopCoins">0</b></div>
+    <div class="card" id="shopSkins" style="display:none"></div>
+  </div>
+  <div class="sub" style="font-size:12px;max-width:760px">
+    Монеты: <b>30</b> за каждый сданный список на кассе, <b>10</b> за побег в люк,
+    <b>15</b> за пойманного покупателя и <b>25</b> за зачищенный магазин.
+    Улучшения робота работают в режиме за Робота-Дефекта, улучшения охранника — за охранника.
+  </div>
+  <div id="shopList"></div>
+  <button class="btn" id="shopBack">НАЗАД</button>
 </div>
 
 <div id="hud" class="hidden">
@@ -154,6 +189,7 @@
     <div class="card" id="stateCard">Магазин работает</div>
     <div class="card" id="taskCard">Списки: 0 / 3</div>
     <div class="card" id="radarCard">🚨 Робот: —</div>
+    <div class="card" id="coinCard">🪙 0</div>
   </div>
   <button id="fsBtn" class="card" style="pointer-events:auto">⛶</button>
 </div>
@@ -232,6 +268,53 @@ const CFG = {
   turnSpeed: 2.6,               // как быстро стрелки ←→ разворачивают героя
 };
 const HALL = { w: 72, d: 88, h: 8 };   // большой торговый зал
+
+/* =========================================================================
+   🪙 МОНЕТЫ И УЛУЧШЕНИЯ
+   Монеты: 30 за каждый сданный список на кассе, 10 за побег в люк,
+   15 за каждого запылесосенного покупателя и 25 за победу роботом.
+   Улучшения робота работают, когда играешь ЗА РОБОТА, улучшения охранника —
+   когда играешь за охранника. Купил всё — открываются золотой робот и призрак.
+   ========================================================================= */
+const UPG = {
+  torch:   { side:'robot',  em:'🔦', name:'Фонарик робота',   unit:'дальность обзора', step:0.20, price:[30,60,100] },
+  battery: { side:'robot',  em:'🔋', name:'Батарея',          unit:'запас батареи',    step:0.10, price:[30,60,100] },
+  charge:  { side:'robot',  em:'⚡', name:'Быстрая зарядка',   unit:'скорость зарядки', step:0.35, price:[40,75,120] },
+  suction: { side:'robot',  em:'🌀', name:'Мощность всасывания', unit:'сила пылесоса', step:0.15, price:[40,75,120] },
+  vacrun:  { side:'robot',  em:'🏎', name:'Ход с пылесосом',   unit:'скорость с включённым пылесосом', step:0.12, price:[40,75,120] },
+  push:    { side:'player', em:'🤚', name:'Сила толчка',       unit:'сила толчка',      step:0.25, price:[30,60,100] },
+  speed:   { side:'player', em:'🏃', name:'Скорость',          unit:'скорость бега',    step:0.08, price:[40,75,120] },
+  jump:    { side:'player', em:'⤴',  name:'Прыжок',            unit:'высота прыжка',    step:0.12, price:[30,60,100] },
+  lamp:    { side:'player', em:'💡', name:'Фонарь охранника',  unit:'дальность фонаря', step:0.20, price:[30,60,100] },
+  memory:  { side:'player', em:'📋', name:'Память',            unit:'время показа списка', step:1.5, add:true, price:[40,75,120] },
+};
+const UPG_MAX = 3;
+let coins = 0;                                   // монеты за текущую смену
+let upgrades = {};                               // купленные уровни
+
+function loadProgress() {
+  try { upgrades = JSON.parse(localStorage.getItem('nightshift_upg') || '{}') || {}; } catch (_) { upgrades = {}; }
+  for (const k of Object.keys(UPG)) upgrades[k] = Math.max(0, Math.min(UPG_MAX, +upgrades[k] || 0));
+}
+function saveProgress() { try { localStorage.setItem('nightshift_upg', JSON.stringify(upgrades)); } catch (_) {} }
+function coinsBank() { try { return +(localStorage.getItem('nightshift_coins') || 0) || 0; } catch (_) { return 0; } }
+function setCoinsBank(n) { try { localStorage.setItem('nightshift_coins', String(Math.max(0, Math.round(n)))); } catch (_) {} }
+
+function upgLvl(k) { return upgrades[k] || 0; }
+function upgOn(k) { const u = UPG[k]; return !!u && (u.side === 'robot' ? asRobot : !asRobot); }
+function upgMul(k) { const u = UPG[k]; return (u && upgOn(k)) ? 1 + u.step * upgLvl(k) : 1; }   // множитель
+function upgAdd(k) { const u = UPG[k]; return (u && upgOn(k)) ? u.step * upgLvl(k) : 0; }        // прибавка
+function upgPrice(k) { const l = upgLvl(k); return l >= UPG_MAX ? null : UPG[k].price[l]; }
+function allMaxed() { return Object.keys(UPG).every(k => upgLvl(k) >= UPG_MAX); }
+loadProgress();
+
+function addCoins(n, why) {
+  coins += n;
+  setCoinsBank(coinsBank() + n);
+  const c = $('coinCard'); if (c) c.textContent = '🪙 ' + coins;
+  bigMsg('🪙 +' + n + (why ? ' · ' + why : ''), 1.3, '#ffd24a');
+  sfx('chime');
+}
 
 /* =========================================================================
    СЦЕНА
@@ -575,6 +658,75 @@ function addPuddle(x, z) {
   return rec;
 }
 function clearPuddles() { puddles.forEach(p => store.remove(p.group)); puddles.length = 0; }
+
+/* 🚧 перегораживающая лента с табличкой «Осторожно, мокрый пол» — пройти нельзя.
+   Каждая новая лента укорачивает проходы: лабиринт растёт прямо во время смены. */
+const barriers = [];
+function addBarrier(x, z, horiz) {
+  const len = 6.4, g = new THREE.Group();
+  const post = () => new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,1.25,10), metalM(0x9aa4b2));
+  const a = post(), b = post();
+  a.position.set(-len/2, 0.62, 0); b.position.set(len/2, 0.62, 0); g.add(a); g.add(b);
+  [0.55, 0.95].forEach(y => {                              // две ленты в косую жёлто-чёрную полоску
+    const tape = new THREE.Mesh(new THREE.BoxGeometry(len, 0.17, 0.03), emisM(0xfacc15, 1.15));
+    tape.position.set(0, y, 0); g.add(tape);
+    for (let i=-2;i<=2;i++) {
+      const dash = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.05), plastic(0x111827));
+      dash.position.set(i*1.15, y, 0.01); dash.rotation.z = 0.5; g.add(dash);
+    }
+  });
+  // жёлтая табличка-раскладушка с человечком и надписью
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.08), emisM(0xfacc15, 0.95));
+  sign.position.set(0, 0.55, 0.16); sign.rotation.x = -0.16; g.add(sign);
+  const man = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.02), plastic(0x111827));
+  man.position.set(0, 0.7, 0.22); g.add(man);
+  const wave = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.02), plastic(0x0ea5e9));
+  wave.position.set(0, 0.28, 0.22); g.add(wave);
+  const beacons = [];                                      // мигающие маячки — видно издалека
+  [-len/2, len/2].forEach(bx => {
+    const bl = new THREE.Mesh(new THREE.SphereGeometry(0.13,10,8), emisM(0xfb923c, 2.2));
+    bl.position.set(bx, 1.32, 0); g.add(bl); beacons.push(bl);
+  });
+  g.position.set(x, 0, z);
+  g.rotation.y = horiz ? 0 : Math.PI/2;
+  store.add(g);
+  const hw = horiz ? len/2 : 0.35, hd = horiz ? 0.35 : len/2;
+  const solid = { minX:x-hw, maxX:x+hw, minZ:z-hd, maxZ:z+hd };
+  solids.push(solid);
+  const rec = { x, z, horiz, group:g, solid, beacons };
+  barriers.push(rec);
+  navBuild();                                        // проходы изменились — пересобрать карту
+  return rec;
+}
+function clearBarriers() {
+  barriers.forEach(b => { store.remove(b.group); const i = solids.indexOf(b.solid); if (i >= 0) solids.splice(i,1); });
+  barriers.length = 0;
+  navBuild();
+}
+/* место под ленту: в проходе, не на игроке, не на кассе/люке и не запирая их */
+function findBarrierSpot() {
+  for (let t=0; t<60; t++) {
+    const horiz = Math.random() < 0.5;
+    const x = (Math.random()-0.5)*(HALL.w-14), z = (Math.random()-0.5)*(HALL.d-14);
+    if (Math.hypot(x-player.x, z-player.z) < 14) continue;
+    if (robot && Math.hypot(x-robot.x, z-robot.z) < 8) continue;
+    if (hatches.some(h => Math.hypot(h.x-x, h.z-z) < 7)) continue;
+    if (tills.some(c => Math.hypot(c.x-x, c.z-z) < 9)) continue;
+    // сама лента должна встать в пустом проходе
+    let ok = true;
+    for (let i=-3; i<=3; i++) {
+      const px = x + (horiz ? i*1.0 : 0), pz = z + (horiz ? 0 : i*1.0);
+      if (!freeAt(px, pz, 0.8)) { ok = false; break; }
+    }
+    if (!ok) continue;
+    // и не должна замуровать проход насмерть: с одной из сторон остаётся обход
+    const sideA = freeAt(x + (horiz ? 0 : 3.2), z + (horiz ? 3.2 : 0), 0.9);
+    const sideB = freeAt(x - (horiz ? 0 : 3.2), z - (horiz ? 3.2 : 0), 0.9);
+    if (!sideA || !sideB) continue;
+    return { x, z, horiz };
+  }
+  return null;
+}
 function updatePuddles(dt) {
   for (const p of puddles) {
     if (p.fade < 1) { p.fade = Math.min(1, p.fade + dt*0.8);
@@ -663,6 +815,20 @@ function buildRobot() {
   vac.position.set(0, 0.22, -0.85); g.add(vac);
   const mouth = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.2), emisM(0x111827, 0.2));
   mouth.position.set(0, 0.22, -1.11); g.add(mouth);
+  // 🌀 ПОТОК ВОЗДУХА — видно, когда пылесос включён: раструб + закрученные пылинки
+  const flow = new THREE.Group(); flow.position.set(0, 0.30, -1.12); flow.visible = false; g.add(flow);
+  const funnel = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4.4, 20, 1, true),
+    new THREE.MeshBasicMaterial({ color:0xbfe9ff, transparent:true, opacity:0.2,
+      side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending }));
+  funnel.rotation.x = Math.PI/2;                 // узкий конец у пасти, раструб вперёд
+  funnel.position.set(0, 0, -2.2); flow.add(funnel);
+  const swirl = [];
+  for (let i=0;i<16;i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5),
+      new THREE.MeshBasicMaterial({ color:0xe6f6ff, transparent:true, opacity:0.8,
+        depthWrite:false, blending:THREE.AdditiveBlending }));
+    p.userData.k = i/16; flow.add(p); swirl.push(p);
+  }
   // колёса
   [[-0.62,-0.5],[0.62,-0.5],[-0.62,0.55],[0.62,0.55]].forEach(([x,z]) => {
     const w = new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.26,0.14,12), plastic(0x14161b));
@@ -697,8 +863,55 @@ function buildRobot() {
       new THREE.MeshBasicMaterial({ color:0xfff0b0, transparent:true, opacity:0.07, side:THREE.DoubleSide }));
     cone.rotation.x = -Math.PI/2; cone.position.set(x, 0.8, -7); g.add(cone); cones.push(cone);
   });
-  g.userData = { eyes, sirenL, sirenR, lamps, cones, mouth };
+  g.userData = { eyes, sirenL, sirenR, lamps, cones, mouth, flow, funnel, swirl, body, stripe, vac, flowT:0 };
   return g;
+}
+
+/* поток воздуха: пылинки закручиваются и летят В пасть */
+function updateFlow(u, on, dt) {
+  u.flow.visible = !!on;
+  if (!on) return;
+  u.flowT += dt;
+  u.funnel.material.opacity = 0.2 + Math.abs(Math.sin(u.flowT*9)) * 0.18;
+  u.swirl.forEach((p, i) => {
+    const k = 1 - ((p.userData.k + u.flowT*0.8) % 1);   // 1 — далеко, 0 — у пасти
+    const ang = k*Math.PI*4 + i, rad = 0.16 + k*1.35;
+    p.position.set(Math.cos(ang)*rad, Math.max(-0.24, Math.sin(ang)*rad*0.5), -k*4.2);
+    p.material.opacity = 0.22 + (1-k)*0.72;
+    p.scale.setScalar(0.55 + (1-k)*0.95);
+  });
+}
+
+/* 🌀 засос мусора: он летит в пасть и исчезает, как только её коснулся */
+function suckTrash(dt, power) {
+  if (!robot) return 0;
+  const fx = -Math.sin(robot.heading), fz = -Math.cos(robot.heading);
+  const reach = 4.4 * (power || 1) * upgMul('suction');
+  let ate = 0;
+  for (let i=dropped.length-1; i>=0; i--) {
+    const d = dropped[i];
+    const dx = robot.x-d.x, dz = robot.z-d.z, dist = Math.hypot(dx,dz) || 0.001;
+    if (dist > reach) continue;
+    const ahead = (-dx*fx - dz*fz) / dist;             // мусор перед роботом?
+    if (ahead < 0.05 && dist > 1.8) continue;
+    const pull = (7.5 * (1 - dist/reach) + 1.6) * upgMul('suction');
+    d.x += dx/dist * pull * dt; d.z += dz/dist * pull * dt;
+    d.mesh.position.set(d.x, 0.05 + Math.min(0.45, (reach-dist)*0.1), d.z);
+    d.mesh.rotation.y += dt*10; d.mesh.rotation.x += dt*6;
+    if (dist < 1.25) {                                  // коснулся пасти — засосал
+      scene.remove(d.mesh); dropped.splice(i,1); ate++;
+      noise(0.2, 0.13, 1300); dustPuff(robot.x, 0.35, robot.z);
+    }
+  }
+  return ate;
+}
+function dustPuff(x, y, z) {
+  for (let i=0;i<7;i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.07,6,5),
+      new THREE.MeshBasicMaterial({ color:0xdfeaff, transparent:true, opacity:0.7, depthWrite:false }));
+    m.position.set(x, y, z); scene.add(m);
+    fxList.push({ mesh:m, v:new THREE.Vector3((Math.random()-0.5)*3, Math.random()*2, (Math.random()-0.5)*3), life:0.4, t:0 });
+  }
 }
 
 /* =========================================================================
@@ -712,6 +925,16 @@ function spawnChar(x, z, hex, isPlayer) {
   mesh.position.set(x, 0, z); scene.add(mesh);
   const a = { mesh, x, z, y:0, vy:0, heading:0, isPlayer, alive:true,
               vx:0, vz:0, panic:0, target:null, retarget:0, r:CFG.playerR };
+  if (!isPlayer) {
+    // бот-покупатель: 3 жизни (видно шариками над головой), сам ходит по магазину
+    a.lives = 3; a.carry = 0; a.lists = 0; a.goal = 'shop'; a.goalT = 0;
+    a.hitCD = 0; a.escaped = false; a.spot = null; a.scanT = null;
+    a.pips = [];
+    for (let i=0;i<3;i++) {
+      const pip = new THREE.Mesh(new THREE.SphereGeometry(0.08,8,6), emisM(0xff4d6d, 1.6));
+      pip.position.set((i-1)*0.22, 2.18, 0); mesh.add(pip); a.pips.push(pip);
+    }
+  }
   actors.push(a);
   return a;
 }
@@ -746,6 +969,116 @@ function collide(p, r) {
   }
 }
 
+/* ---------- умное движение: обход стеллажей вместо «стою и жду» ----------
+   Раньше робот ехал строго по прямой к цели: упёрся в стеллаж — и стоял на месте,
+   будто дожидается игрока. Теперь он щупает направления вокруг цели и едет
+   по первому свободному, а если совсем зажало — уходит в объезд. */
+function freeAt(x, z, r) {
+  if (Math.abs(x) > HALL.w/2 - r || Math.abs(z) > HALL.d/2 - r) return false;
+  for (const s of solids) {
+    if (x > s.minX-r && x < s.maxX+r && z > s.minZ-r && z < s.maxZ+r) return false;
+  }
+  return true;
+}
+/* ---------- КАРТА ПРОХОДИМОСТИ + ПОИСК ПУТИ (BFS) ----------
+   Одного «щупания вокруг» мало: в лабиринте 72×88 робот кружил вокруг стеллажа
+   и не мог доехать до цели. Поэтому строим сетку проходимых клеток и ищем путь. */
+const NAV = { cell:1.6, w:0, d:0, grid:null };
+function navBuild() {
+  NAV.w = Math.ceil(HALL.w / NAV.cell); NAV.d = Math.ceil(HALL.d / NAV.cell);
+  NAV.grid = new Uint8Array(NAV.w * NAV.d);
+  for (let i=0;i<NAV.w;i++) for (let j=0;j<NAV.d;j++) {
+    const p = navPos(i,j);
+    NAV.grid[j*NAV.w+i] = freeAt(p.x, p.z, 0.85) ? 1 : 0;
+  }
+}
+function navPos(i, j) { return { x:-HALL.w/2 + (i+0.5)*NAV.cell, z:-HALL.d/2 + (j+0.5)*NAV.cell }; }
+function navIdx(x, z) {
+  return [ Math.max(0, Math.min(NAV.w-1, Math.floor((x + HALL.w/2)/NAV.cell))),
+           Math.max(0, Math.min(NAV.d-1, Math.floor((z + HALL.d/2)/NAV.cell))) ];
+}
+function navFreeNear(i, j) {                    // цель в стеллаже — берём ближайшую свободную клетку
+  if (NAV.grid[j*NAV.w+i]) return [i,j];
+  for (let r=1;r<=6;r++) for (let di=-r;di<=r;di++) for (let dj=-r;dj<=r;dj++) {
+    if (Math.max(Math.abs(di),Math.abs(dj)) !== r) continue;
+    const ni = i+di, nj = j+dj;
+    if (ni<0||nj<0||ni>=NAV.w||nj>=NAV.d) continue;
+    if (NAV.grid[nj*NAV.w+ni]) return [ni,nj];
+  }
+  return null;
+}
+/* ближайшая путевая точка на пути к цели (или null, если пути нет) */
+function navStep(fromX, fromZ, tx, tz) {
+  if (!NAV.grid) navBuild();
+  const [si, sj] = navIdx(fromX, fromZ);
+  const g = navFreeNear(...navIdx(tx, tz)); if (!g) return null;
+  const start = navFreeNear(si, sj); if (!start) return null;
+  const W = NAV.w, D = NAV.d, total = W*D;
+  const prev = new Int32Array(total).fill(-1);
+  const q = new Int32Array(total);
+  let head = 0, tail = 0;
+  const gi = g[0]*1, gj = g[1]*1, goal = gj*W+gi, from = start[1]*W+start[0];
+  q[tail++] = goal; prev[goal] = goal;                 // ищем ОТ цели — так путь сразу от нас
+  while (head < tail) {
+    const cur = q[head++];
+    if (cur === from) break;
+    const ci = cur % W, cj = (cur - ci)/W;
+    for (let k=0;k<4;k++) {
+      const ni = ci + (k===0?1:k===1?-1:0), nj = cj + (k===2?1:k===3?-1:0);
+      if (ni<0||nj<0||ni>=W||nj>=D) continue;
+      const nb = nj*W+ni;
+      if (prev[nb] !== -1 || !NAV.grid[nb]) continue;
+      prev[nb] = cur; q[tail++] = nb;
+    }
+  }
+  if (prev[from] === -1) return null;
+  // шагаем по цепочке к цели на пару клеток вперёд — так ход получается плавным
+  let cur = from;
+  for (let step=0; step<2 && prev[cur] !== cur; step++) cur = prev[cur];
+  const ci = cur % W, cj = (cur - ci)/W;
+  return navPos(ci, cj);
+}
+/* прямая видимость: если до цели чисто — идём напрямик, без всякого поиска */
+function losClear(ax, az, bx, bz, r) {
+  const d = Math.hypot(bx-ax, bz-az), n = Math.max(1, Math.ceil(d/0.7));
+  for (let i=1;i<=n;i++) { const t = i/n;
+    if (!freeAt(ax + (bx-ax)*t, az + (bz-az)*t, r)) return false; }
+  return true;
+}
+/* куда реально ехать в этом кадре: напрямик или по найденному пути */
+function pathPoint(ent, tx, tz, dt, r) {
+  if (losClear(ent.x, ent.z, tx, tz, r*0.85)) { ent.navNext = null; return { x:tx, z:tz }; }
+  ent.navT = (ent.navT || 0) - dt;
+  const сменилась = !ent.navGoal || Math.hypot(ent.navGoal.x-tx, ent.navGoal.z-tz) > 2.5;
+  if (ent.navT <= 0 || сменилась || !ent.navNext) {
+    ent.navT = 0.35; ent.navGoal = { x:tx, z:tz };
+    ent.navNext = navStep(ent.x, ent.z, tx, tz);
+  }
+  if (!ent.navNext) return { x:tx, z:tz };
+  if (Math.hypot(ent.navNext.x-ent.x, ent.navNext.z-ent.z) < 1.0) ent.navT = 0;
+  return ent.navNext;
+}
+const PROBE = [0, 0.4, -0.4, 0.8, -0.8, 1.25, -1.25, 1.7, -1.7, 2.2, -2.2, 2.7, -2.7];
+function steerDir(ent, tx, tz, r, reach) {
+  const base = Math.atan2(tx-ent.x, tz-ent.z);
+  const far = reach || 3.2;
+  for (const off of PROBE) {
+    const a = base + off, sx = Math.sin(a), sz = Math.cos(a);
+    if (freeAt(ent.x + sx*far, ent.z + sz*far, r*1.05) &&
+        freeAt(ent.x + sx*far*0.5, ent.z + sz*far*0.5, r*1.05)) return a;
+  }
+  return base + Math.PI;                       // всё закрыто — разворот
+}
+/* «застрял» = за 0,7 сек почти не сдвинулся */
+function trackStuck(ent, dt) {
+  ent.stuckT = (ent.stuckT || 0) + dt;
+  if (ent.stuckT < 0.7) return false;
+  const moved = Math.hypot(ent.x - (ent.lastX || 0), ent.z - (ent.lastZ || 0));
+  const first = ent.lastX === undefined;
+  ent.stuckT = 0; ent.lastX = ent.x; ent.lastZ = ent.z;
+  return !first && moved < 0.35;
+}
+
 /* =========================================================================
    УПРАВЛЕНИЕ
    ========================================================================= */
@@ -757,7 +1090,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyE') doTake();
   if (e.code === 'KeyF') doPush();
   if (e.code === 'KeyQ') doDrop();
-  if (e.code === 'KeyL' || e.code === 'Tab') { showList(4); e.preventDefault(); }
+  if (e.code === 'KeyL' || e.code === 'Tab') { showList(4 + upgAdd('memory')); e.preventDefault(); }
   if (e.code === 'KeyG') setTorch(!torchOn);
   if (e.code === 'KeyM') useMagnet();
   if (e.code === 'KeyR') setRun(!runOn);
@@ -807,7 +1140,7 @@ function updStick(cx, cy) {
 $('jumpBtn').addEventListener('click', doJump);
 $('pushBtn').addEventListener('click', doPush);
 $('takeBtn').addEventListener('click', doTake);
-$('listBtn').addEventListener('click', () => showList(4));
+$('listBtn').addEventListener('click', () => showList(4 + upgAdd('memory')));
 $('magBtn').addEventListener('click', useMagnet);
 $('runBtn').addEventListener('click', () => setRun(!runOn));
 $('vacBtn').addEventListener('pointerdown', () => setVac(true));
@@ -865,7 +1198,7 @@ function newTask() {
   while (taskList.length < 3 && pool.length) {
     taskList.push(pool.splice(Math.floor(Math.random()*pool.length), 1)[0]);
   }
-  showList(7);
+  showList(7 + upgAdd('memory'));
   sfx('chime');
   bigMsg('📋 ЗАПОМНИ СПИСОК', 1.4, '#8affc0');
 }
@@ -894,6 +1227,7 @@ function scanAtTill() {
   bag[0] = bag[1] = bag[2] = null; drawInv();
   listsDone++; taskList = null;
   $('taskCard').textContent = 'Списки: ' + listsDone + ' / 3';
+  addCoins(30, 'касса пройдена');                      // 🪙 30 за каждый сданный список
   if (listsDone >= 3) {
     exitOpen = true;
     hatches.forEach(h => h.mark.material.emissiveIntensity = h.real ? 1.6 : 0.3);
@@ -939,6 +1273,12 @@ function sparksAt(x, y, z) {
   }
 }
 const fxList = [];
+function updateBarriers() {
+  for (const b of barriers) {
+    const k = 0.7 + Math.abs(Math.sin(time*3.4 + b.x)) * 2.2;
+    b.beacons.forEach((bl, i) => bl.material.emissiveIntensity = i ? (2.9 - k) : k);
+  }
+}
 function updateFx(dt) {
   for (let i=fxList.length-1;i>=0;i--) {
     const f = fxList[i]; f.t += dt; f.v.y -= 9*dt;
@@ -1056,8 +1396,10 @@ function setTorch(on) {
 }
 function updateTorch() {
   const fx = Math.sin(yaw), fz = Math.cos(yaw);
+  const reach = 14 * upgMul('lamp');                 // 💡 улучшение «Фонарь охранника»
+  torch.distance = 30 * upgMul('lamp');
   torch.position.set(player.x, 1.7, player.z);
-  torch.target.position.set(player.x + fx*14, 0.4, player.z + fz*14);
+  torch.target.position.set(player.x + fx*reach, 0.4, player.z + fz*reach);
   torch.intensity = torchOn ? (phase === 'night' ? 55 : 12) : 0;
   torchCone.visible = torchOn && phase === 'night';
   if (torchCone.visible) {
@@ -1070,7 +1412,7 @@ function updateTorch() {
   // настоящие люки видно ТОЛЬКО когда на них светишь
   for (const h of hatches) {
     const dx = h.x-player.x, dz = h.z-player.z, d = Math.hypot(dx,dz);
-    const lit = torchOn && d < 13 && (dx*fx + dz*fz)/(d||1) > 0.75;
+    const lit = torchOn && d < 13 * upgMul('lamp') && (dx*fx + dz*fz)/(d||1) > 0.75;
     h.mark.material.emissiveIntensity = lit ? (h.real ? 2.2 : 0.9) : 0.05;
   }
 }
@@ -1079,7 +1421,7 @@ $('slotLamp').addEventListener('click', () => setTorch(!torchOn));
 /* прыгать умеет только человек — робот на колёсиках не может */
 function doJump() {
   if (state !== 'play' || !player.alive) return;
-  if (player.y <= 0.001) { player.vy = CFG.jumpV; sfx('jump'); }
+  if (player.y <= 0.001) { player.vy = CFG.jumpV * upgMul('jump'); sfx('jump'); }
 }
 
 /* толкнуть соседа: спасти его от робота или наоборот подставить */
@@ -1093,7 +1435,8 @@ function doPush() {
   }
   if (!best) { hint('Рядом никого нет'); return; }
   const dx = best.x-player.x, dz = best.z-player.z, l = Math.hypot(dx,dz)||1;
-  best.vx += dx/l * CFG.pushForce; best.vz += dz/l * CFG.pushForce;
+  const F = CFG.pushForce * upgMul('push');
+  best.vx += dx/l * F; best.vz += dz/l * F;
   best.shove = 0.8;                              // пока летит — своим ходом не рулит
   best.panic = 3;
   sfx('push');
@@ -1215,6 +1558,17 @@ function setHatchReal(h) {
 function spawnHazard() {
   hazards++;
   const reals = hatches.filter(h => h.real);
+  // 🚧 треть сбоев — перегороженный лентой проход: лабиринт становится длиннее
+  if (Math.random() < 0.34) {
+    const spot = findBarrierSpot();
+    if (spot) {
+      addBarrier(spot.x, spot.z, spot.horiz);
+      sfx('door'); noise(0.45, 0.14, 800);
+      bigMsg('🚧 ПРОХОД ПЕРЕКРЫТ\nОсторожно, мокрый пол', 2.4, '#facc15');
+      hint('Ленту не перепрыгнуть — ищи обход');
+      return;
+    }
+  }
   // люк ломаем, только если после этого останется хотя бы два настоящих
   const canBreak = reals.length > 2 && Math.random() < 0.45;
   if (canBreak) {
@@ -1236,6 +1590,8 @@ function spawnHazard() {
 
 function goDark() {
   phase = 'night';
+  if (robot) robot.mesh.userData.eyes.forEach(e => {   // сбой начался — глаза краснеют
+    e.material.color.setHex(0xff2b2b); e.material.emissive.setHex(0xff2b2b); e.material.emissiveIntensity = 2.4; });
   hazardT = HAZARD_EVERY;
   hemi.intensity = 0.10; sun.intensity = 0.04;
   scene.fog.near = 8; scene.fog.far = 42;
@@ -1269,10 +1625,119 @@ function updateHearts() { $('hearts').textContent = '❤️'.repeat(hearts) + '�
    🤖 РЕЖИМ ЗА РОБОТА-ДЕФЕКТА (открывается после первого побега)
    ========================================================================= */
 let asRobot = false, battery = 100, vacOn = false, caught = 0, robotLeft = 0;
+let cleaned = 0, escapedCount = 0, shoppersTotal = 6;   // съеденный мусор, сбежавшие, всего покупателей
 let vacNoise = null, vacOsc = null, vacGain = null;
 
 function escapedBefore() { try { return localStorage.getItem('nightshift_escaped') === '1'; } catch (_) { return false; } }
-function refreshMenu() { $('robotBtn').classList.toggle('hidden', !escapedBefore()); }
+function refreshMenu() {
+  $('robotBtn').classList.toggle('hidden', !escapedBefore());
+  $('menuCoins').textContent = coinsBank();
+}
+
+/* =========================================================================
+   🛒 МАГАЗИН УЛУЧШЕНИЙ + НАГРАДЫ ЗА ПОЛНУЮ ПРОКАЧКУ
+   ========================================================================= */
+let skinGold = false, skinGhost = false;
+try {
+  skinGold  = localStorage.getItem('nightshift_skin_gold')  === '1';
+  skinGhost = localStorage.getItem('nightshift_skin_ghost') === '1';
+} catch (_) {}
+function goldActive()  { return allMaxed() && skinGold  &&  asRobot; }
+function ghostActive() { return allMaxed() && skinGhost && !asRobot; }
+
+function pipsStr(k) { return '●'.repeat(upgLvl(k)) + '○'.repeat(UPG_MAX - upgLvl(k)); }
+function upgText(k) {
+  const u = UPG[k], l = upgLvl(k);
+  const now = u.add ? (l ? '+' + (u.step*l).toFixed(1).replace('.',',') + ' сек' : 'без прибавки')
+                    : (l ? '+' + Math.round(u.step*l*100) + '%' : 'без прибавки');
+  const next = u.add ? '+' + u.step.toFixed(1).replace('.',',') + ' сек'
+                     : '+' + Math.round(u.step*100) + '%';
+  return { now, next };
+}
+function renderShop() {
+  const bank = coinsBank();
+  $('shopCoins').textContent = bank;
+  $('menuCoins').textContent = bank;
+  const box = $('shopList');
+  let html = '';
+  for (const side of ['robot','player']) {
+    html += '<div class="shopTitle">' + (side === 'robot'
+      ? '🤖 РОБОТ-ДЕФЕКТ — работают, когда играешь за робота'
+      : '👮 ОХРАННИК — работают, когда играешь за охранника') + '</div>';
+    for (const k of Object.keys(UPG)) {
+      const u = UPG[k]; if (u.side !== side) continue;
+      const price = upgPrice(k), t = upgText(k);
+      const btn = price === null
+        ? '<button disabled>МАКС</button>'
+        : '<button data-buy="' + k + '"' + (bank < price ? ' disabled' : '') + '>' + price + ' 🪙</button>';
+      html += '<div class="upg"><div class="em">' + u.em + '</div><div class="info">'
+        + '<div class="nm">' + u.name + ' <span class="pips">' + pipsStr(k) + '</span></div>'
+        + '<div class="ds">' + u.unit + ': сейчас <b>' + t.now + '</b>'
+        + (price === null ? ' · прокачано до конца' : ' · следующий уровень ' + t.next) + '</div>'
+        + '</div>' + btn + '</div>';
+    }
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('button[data-buy]').forEach(b =>
+    b.addEventListener('click', () => buyUpgrade(b.dataset.buy)));
+
+  // награды за полную прокачку
+  const sk = $('shopSkins');
+  if (allMaxed()) {
+    sk.style.display = 'block';
+    sk.innerHTML = 'Награды: <button id="tGold" class="card" style="cursor:pointer;color:'
+      + (skinGold ? '#ffd24a' : '#ffffff66') + '">🥇 Золотой робот: ' + (skinGold ? 'ВКЛ' : 'выкл') + '</button> '
+      + '<button id="tGhost" class="card" style="cursor:pointer;color:'
+      + (skinGhost ? '#a5f3fc' : '#ffffff66') + '">👻 Призрачный костюм: ' + (skinGhost ? 'ВКЛ' : 'выкл') + '</button>';
+    $('tGold').addEventListener('click', () => {
+      skinGold = !skinGold; try { localStorage.setItem('nightshift_skin_gold', skinGold ? '1' : '0'); } catch (_) {}
+      sfx('click'); renderShop();
+    });
+    $('tGhost').addEventListener('click', () => {
+      skinGhost = !skinGhost; try { localStorage.setItem('nightshift_skin_ghost', skinGhost ? '1' : '0'); } catch (_) {}
+      sfx('click'); renderShop();
+    });
+  } else {
+    sk.style.display = 'none';
+  }
+}
+function buyUpgrade(k) {
+  const price = upgPrice(k);
+  if (price === null) return;
+  const bank = coinsBank();
+  if (bank < price) { sfx('drop'); return; }
+  setCoinsBank(bank - price);
+  upgrades[k] = upgLvl(k) + 1; saveProgress();
+  sfx('chime');
+  const justDone = allMaxed();
+  renderShop();
+  if (justDone) {
+    skinGold = true; skinGhost = true;
+    try { localStorage.setItem('nightshift_skin_gold','1'); localStorage.setItem('nightshift_skin_ghost','1'); } catch (_) {}
+    renderShop();
+    bigMsg('🥇 ЗОЛОТОЙ РОБОТ И 👻 ПРИЗРАЧНЫЙ КОСТЮМ ОТКРЫТЫ!', 3.5, '#ffd24a');
+  }
+}
+function openShop() { renderShop(); $('shop').classList.remove('hidden'); $('menu').classList.add('hidden'); }
+function closeShop() { $('shop').classList.add('hidden'); $('menu').classList.remove('hidden'); refreshMenu(); }
+
+/* 🥇 золотой корпус и 👻 полупрозрачный костюм */
+function applySkins() {
+  if (robot) {
+    const u = robot.mesh.userData, gold = goldActive();
+    [u.body, u.vac].forEach(m => { m.material.color.setHex(gold ? 0xffd24a : (m === u.vac ? 0x2b3140 : 0xdfe4ec));
+                                   m.material.metalness = gold ? 0.9 : 0.15; m.material.roughness = gold ? 0.25 : 0.5; });
+    u.stripe.material.color.setHex(gold ? 0xb45309 : 0x1e3a8a);
+  }
+  if (player && player.mesh) {
+    const gh = ghostActive();
+    player.mesh.traverse(o => {
+      if (!o.material || Array.isArray(o.material)) return;
+      o.material.transparent = gh || o.material.transparent;
+      o.material.opacity = gh ? 0.42 : 1;
+    });
+  }
+}
 
 /* гудящий звук пылесоса: шум мотора + вой турбины */
 function vacSound(on) {
@@ -1312,7 +1777,8 @@ function updateAsRobot(dt) {
   if (stickId !== null) { mx += stickVec.x; mz += stickVec.y; }
   const l = Math.hypot(mx,mz); if (l > 1) { mx/=l; mz/=l; }
   const sin = Math.sin(yaw), cos = Math.cos(yaw);
-  const sp = CFG.robotChase * (vacOn ? 0.6 : 1);        // с включённым пылесосом едет медленнее
+  // с включённым пылесосом едет медленнее — но улучшение «Ход с пылесосом» это лечит
+  const sp = CFG.robotChase * (vacOn ? Math.min(1, 0.6 * upgMul('vacrun')) : 1);
   robot.x += (sin*(-mz) - cos*mx) * sp * dt;
   robot.z += (cos*(-mz) + sin*mx) * sp * dt;
   collide(robot, robot.r);
@@ -1320,46 +1786,85 @@ function updateAsRobot(dt) {
   robot.mesh.position.set(robot.x, 0, robot.z);
   robot.mesh.rotation.y = robot.heading;
 
-  // пылесос и батарея
+  // пылесос и батарея (ёмкость и скорость зарядки — улучшаемые)
+  const cap = 100 * upgMul('battery');
   if (vacOn && battery > 0) {
     battery = Math.max(0, battery - 22*dt);
     if (battery === 0) setVac(false);
-  } else if (!vacOn) battery = Math.min(100, battery + 13*dt);
-  $('batFill').style.width = battery + '%';
-  $('batFill').style.background = battery < 25 ? '#ef4444' : (battery < 55 ? '#f59e0b' : 'linear-gradient(90deg,#22c55e,#a3e635)');
+  } else if (!vacOn) battery = Math.min(cap, battery + 13 * upgMul('charge') * dt);
+  $('batFill').style.width = Math.round(battery/cap*100) + '%';
+  $('batFill').style.background = battery < cap*0.25 ? '#ef4444' : (battery < cap*0.55 ? '#f59e0b' : 'linear-gradient(90deg,#22c55e,#a3e635)');
 
   const u = robot.mesh.userData;
   u.mouth.material.emissiveIntensity = vacOn ? 1.6 : 0.2;
   u.sirenL.material.emissiveIntensity = 0.4 + Math.abs(Math.sin(time*8))*2.0;
   u.sirenR.material.emissiveIntensity = 0.4 + Math.abs(Math.cos(time*8))*2.0;
+  // 🔦 фонарики робота — дальность улучшаемая
+  const beam = upgMul('torch');
+  u.lamps.forEach(L => { L.intensity = 20 * beam; L.distance = 22 * beam; });
+  u.cones.forEach(c => { c.material.opacity = 0.13; c.scale.set(beam, beam, beam); });
+
+  // 🌀 поток воздуха и уборка мусора
+  updateFlow(u, vacOn, dt);
+  if (vacOn) { const ate = suckTrash(dt, 1.35); if (ate) cleaned += ate; }
 
   // всасываем покупателей
+  const reach = CFG.suckDist * 1.6 * upgMul('suction');
   for (const a of actors) {
     if (!a.alive) continue;
     const dx = robot.x-a.x, dz = robot.z-a.z, d = Math.hypot(dx,dz) || 1;
-    if (d < 13) a.panic = 2;
-    if (vacOn && d < CFG.suckDist * 1.6) {
-      const pull = CFG.suckPull * 1.6 * (1 - d/(CFG.suckDist*1.6));
+    if (d < 13) a.panic = Math.max(a.panic, 2);
+    if (vacOn && d < reach) {
+      const pull = CFG.suckPull * 1.6 * upgMul('suction') * (1 - d/reach);
       a.vx += dx/d * pull * dt * 7; a.vz += dz/d * pull * dt * 7;
     }
-    if (d < CFG.catchDist + 0.4) {
-      a.alive = false; scene.remove(a.mesh); caught++;
-      sfx('hurt'); noise(0.4, 0.25, 900);
-      bigMsg('😈 ЗАПЫЛЕСОСИЛ ' + caught + ' / ' + actors.length, 1.4, '#c9a6ff');
-      if (caught >= actors.length) { state = 'win'; stopMusic(); vacSound(false);
-        $('winScreen').classList.remove('hidden');
-        $('winScreen').querySelector('h1').textContent = 'ВСЕ ПОЙМАНЫ';
-        $('winText').innerHTML = 'Ты запылесосил всех покупателей. Магазин чист.'; }
-    }
+    if (d < CFG.catchDist + 0.4) hitShopper(a);
   }
-  if (robotLeft <= 0 && state === 'play') {
-    state = 'dead'; stopMusic(); vacSound(false);
-    bigMsg('⏰ УТРО. ОНИ СБЕЖАЛИ', 3, '#8affc0');
-    setTimeout(() => { $('menu').classList.remove('hidden'); state = 'menu'; refreshMenu(); }, 2400);
-  }
+  if (robotLeft <= 0 && state === 'play') robotLose('⏰ УТРО. ОНИ ОТСИДЕЛИСЬ');
   $('stateCard').textContent = '🤖 Ты Робот-Дефект · ' + Math.max(0,Math.ceil(robotLeft)) + ' сек';
-  $('taskCard').textContent = 'Поймано: ' + caught + ' / ' + actors.length;
-  $('radarCard').textContent = vacOn ? '🌀 ПЫЛЕСОС ВКЛЮЧЁН' : '🔋 ' + Math.round(battery) + '%';
+  $('taskCard').textContent = 'Поймано: ' + caught + ' / ' + shoppersTotal + ' · сбежали: ' + escapedCount;
+  $('radarCard').textContent = vacOn ? '🌀 ПЫЛЕСОС · мусора съел ' + cleaned : '🔋 ' + Math.round(battery/cap*100) + '%';
+}
+
+/* покупателю сняли жизнь; жизни кончились — запылесосен насовсем */
+function hitShopper(a) {
+  if (a.hitCD > 0 || !a.alive) return;
+  a.lives = (a.lives === undefined ? 3 : a.lives) - 1;
+  a.hitCD = 1.3;
+  if (a.pips && a.pips[a.lives]) a.pips[a.lives].visible = false;
+  sfx('hurt'); noise(0.35, 0.2, 900);
+  if (a.lives <= 0) {
+    a.alive = false; scene.remove(a.mesh); caught++;
+    addCoins(15, 'покупатель пойман');
+    bigMsg('😈 ЗАПЫЛЕСОСИЛ ' + caught + ' / ' + shoppersTotal, 1.4, '#c9a6ff');
+    checkRobotEnd();
+  } else {
+    a.x = -a.x * 0.8; a.z = -a.z * 0.8; a.vx = a.vz = 0;
+    a.panic = 3; a.carry = Math.max(0, (a.carry||0) - 1);
+    bigMsg('💥 ЖИЗНЬ ДОЛОЙ · у него осталось ' + a.lives, 1.2, '#fca5a5');
+  }
+}
+
+function checkRobotEnd() {
+  if (state !== 'play' || !asRobot) return;
+  const left = actors.filter(a => a.alive && !a.isPlayer).length;
+  if (caught >= shoppersTotal) robotWin();
+  else if (left === 0) robotLose('🕳 ВСЕ СБЕЖАЛИ В ЛЮК');
+}
+function robotWin() {
+  state = 'win'; stopMusic(); vacSound(false);
+  addCoins(25, 'магазин зачищен');
+  $('winScreen').classList.remove('hidden');
+  $('winScreen').querySelector('h1').textContent = 'ВСЕ ПОЙМАНЫ';
+  $('winText').innerHTML = 'Ты запылесосил всех покупателей — магазин чист.<br>'
+    + 'Сбежать успели: <b>' + escapedCount + '</b> · мусора съедено: <b>' + cleaned + '</b><br>'
+    + '🪙 Монет за смену: <b>' + coins + '</b> · в копилке: <b>' + coinsBank() + '</b>';
+  sfx('chime');
+}
+function robotLose(msg) {
+  state = 'dead'; stopMusic(); vacSound(false);
+  bigMsg(msg, 3, '#8affc0');
+  setTimeout(() => { $('menu').classList.remove('hidden'); state = 'menu'; refreshMenu(); }, 2400);
 }
 
 function setVac(on) {
@@ -1369,7 +1874,10 @@ function setVac(on) {
 
 function startGame() {
   state = 'play'; time = 0; hearts = 3; updateHearts();
+  coins = 0; cleaned = 0; escapedCount = 0;
+  $('coinCard').textContent = '🪙 0';
   $('menu').classList.add('hidden');
+  $('shop').classList.add('hidden');
   $('hud').classList.remove('hidden');
   $('actions').classList.remove('hidden');
   if (isTouch) $('stick').style.display = 'block';
@@ -1397,6 +1905,7 @@ function startGame() {
   hatches.forEach(h => { h.used = false; setHatchReal(h); });
   setHatchFake(hatches[0]); setHatchFake(hatches[4]);   // с самого начала пара ловушек
   clearPuddles();
+  clearBarriers();
   addPuddle(-24, -32); addPuddle(12, 10);                // и всего две лужи
   puddles.forEach(p => { p.fade = 1; p.m.material.opacity = 0.72; p.rim.material.opacity = 0.35; });
   hazards = 0; hazardT = HAZARD_EVERY;
@@ -1407,8 +1916,12 @@ function startGame() {
   dropped.forEach(d => scene.remove(d.mesh)); dropped.length = 0;
   // покупатели намусорили за день — роботу есть чем заняться
   ['apple','banana','socks','battery','cap','lemon','shirt'].forEach((id, i) => {
-    const a = (i/7)*Math.PI*2 + 0.4, rad = 12 + (i%3)*9;
-    const x = Math.cos(a)*rad, z = Math.sin(a)*rad*1.2;
+    let x, z, a = (i/7)*Math.PI*2 + 0.4, rad = 12 + (i%3)*9;
+    for (let t=0; t<40; t++) {                          // мусор кладём в проход, а не в стеллаж
+      x = Math.cos(a)*rad; z = Math.sin(a)*rad*1.2;
+      if (freeAt(x, z, 1.1)) break;
+      a += 0.37; rad = 10 + ((rad + 2.5) % 22);
+    }
     const m = makeItem(id); m.position.set(x, 0.05, z); scene.add(m);
     dropped.push({ id, mesh:m, x, z });
   });
@@ -1426,16 +1939,19 @@ function startGame() {
   if (robot) scene.remove(robot.mesh);
   spawnRobot(0, -HALL.d/2 + 10);
   yaw = 0; pitch = 0.12;
+  shoppersTotal = actors.filter(a => !a.isPlayer).length;
   if (asRobot) {
-    battery = 100; vacOn = false; caught = 0; robotLeft = 180;
+    battery = 100 * upgMul('battery'); vacOn = false; caught = 0; robotLeft = 180;
     phase = 'night'; hemi.intensity = 0.12; sun.intensity = 0.05;
     scene.fog.near = 8; scene.fog.far = 42;
     lampRows.forEach(row => { row.lights.forEach(L => L.intensity = 0); row.meshes.forEach(m => m.material.emissiveIntensity = 0.02); });
     stopMusic(); startMusic('night');
     robot.x = player.x; robot.z = player.z;              // роботом играем от места старта
     scene.remove(player.mesh); actors.splice(actors.indexOf(player), 1);
-    hint('Ты Робот-Дефект. 🌀 — пылесос (жрёт батарею). Поймай всех за 3 минуты.');
+    shoppersTotal = actors.filter(a => !a.isPlayer).length;
+    hint('Ты Робот-Дефект. 🌀 — пылесос (жрёт батарею). У каждого покупателя 3 жизни, и они умеют сбегать в люк.');
   }
+  applySkins();
   hint('Стрелки: ↑↓ идти, ←→ поворачиваться. Или WASD + мышь. Клик по товару — взять. Shift — бег, Пробел — прыжок');
 }
 
@@ -1488,18 +2004,24 @@ function tryHatch() {
 }
 
 function winGame() {
+  addCoins(10, 'побег в люк');                          // 🪙 10 за побег
   state = 'win'; stopMusic();
   try { localStorage.setItem('nightshift_escaped', '1'); } catch (_) {}
   $('winScreen').classList.remove('hidden');
+  $('winScreen').querySelector('h1').textContent = 'ТЫ СБЕЖАЛ';
   $('winText').innerHTML = 'Ты выбрался из закрытого магазина, пока Робот-Дефект искал тебя в темноте.<br>'
-    + 'Сердец осталось: <b>' + hearts + '</b> из 3.<br><br>Теперь в меню открылся <b>режим за Робота-Дефекта</b>.';
+    + 'Сердец осталось: <b>' + hearts + '</b> из 3.<br>'
+    + '🪙 Монет за смену: <b>' + coins + '</b> · в копилке: <b>' + coinsBank() + '</b><br><br>'
+    + 'Теперь в меню открылся <b>режим за Робота-Дефекта</b> и <b>магазин улучшений</b>.';
   sfx('chime'); setTimeout(() => sfx('chime'), 300);
 }
 
 /* ---------- робот ---------- */
 function robotSees(a) {
   const dx = a.x-robot.x, dz = a.z-robot.z, d = Math.hypot(dx,dz);
-  if (d > CFG.seeDist) return false;
+  // 👻 призрачный костюм: боты замечают тебя только вплотную
+  const range = CFG.seeDist * ((a.isPlayer && ghostActive()) ? 0.28 : 1);
+  if (d > range) return false;
   const fx = -Math.sin(robot.heading), fz = -Math.cos(robot.heading);
   const dot = (dx*fx + dz*fz) / (d || 1);
   return dot > Math.cos(CFG.seeAngle * 2);
@@ -1536,14 +2058,18 @@ function updateRobot(dt) {
   // Днём это вся его работа, ночью — то, чем его можно отвлечь.
   if (robot.mode !== 'chase' && dropped.length) {
     let bestD = null, bd = 1e9;
-    for (const d of dropped) { const dd = Math.hypot(d.x-robot.x, d.z-robot.z); if (dd < bd) { bd = dd; bestD = d; } }
-    if (bestD && bd < 40) {
-      robot.mode = 'clean'; robot.trash = bestD;
-      if (bd < 1.6) {                                   // убрал — мусора больше нет
-        scene.remove(bestD.mesh); dropped.splice(dropped.indexOf(bestD), 1);
-        robot.mode = 'patrol'; robot.trash = null; noise(0.4, 0.12, 900);
-      }
+    for (const d of dropped) {
+      if (d.skipT > time) continue;                     // к этому не подобраться — позже
+      const dd = Math.hypot(d.x-robot.x, d.z-robot.z);
+      if (dd < bd) { bd = dd; bestD = d; }
     }
+    if (bestD && bd < 40) { robot.mode = 'clean'; robot.trash = bestD; }
+    else if (!bestD && robot.mode === 'clean') { robot.mode = 'patrol'; robot.trash = null; }
+  }
+  // мусор засосало — цель пропала, значит едем работать дальше, а не стоим
+  if (robot.trash && dropped.indexOf(robot.trash) < 0) {
+    robot.trash = null;
+    if (robot.mode === 'clean') robot.mode = 'patrol';
   }
 
   let tx, tz, sp;
@@ -1567,10 +2093,20 @@ function updateRobot(dt) {
     const w = WAYPOINTS[robot.wp]; tx = w[0]; tz = w[1]; sp = CFG.robotPatrol;
     if (Math.hypot(tx-robot.x, tz-robot.z) < 2) robot.wp = (robot.wp+1) % WAYPOINTS.length;
   }
-  const dx = tx-robot.x, dz = tz-robot.z, d = Math.hypot(dx,dz) || 1;
-  robot.x += dx/d * sp * dt; robot.z += dz/d * sp * dt;
+  // ── едем УМНО: не в лоб, а по свободному направлению; зажало — объезд ──
+  if (trackStuck(robot, dt)) {
+    // не смог подобраться к мусору — отложим его на 15 сек и займёмся другим
+    if (robot.mode === 'clean' && robot.trash) { robot.trash.skipT = time + 15; robot.trash = null; robot.mode = 'patrol'; }
+    const a = Math.atan2(tx-robot.x, tz-robot.z) + (Math.random()<0.5?-1:1) * (1.1 + Math.random());
+    robot.detourT = 2.0;
+    robot.dtx = robot.x + Math.sin(a)*10; robot.dtz = robot.z + Math.cos(a)*10;
+  }
+  if (robot.detourT > 0) { robot.detourT -= dt; tx = robot.dtx; tz = robot.dtz; }
+  const way = pathPoint(robot, tx, tz, dt, robot.r);
+  const dir = Math.atan2(way.x-robot.x, way.z-robot.z);
+  robot.x += Math.sin(dir) * sp * dt; robot.z += Math.cos(dir) * sp * dt;
   collide(robot, robot.r);
-  robot.heading = Math.atan2(-dx, -dz);
+  robot.heading = dir + Math.PI;                        // «перед» робота = (-sin, -cos)
   robot.mesh.position.set(robot.x, 0, robot.z);
   robot.mesh.rotation.y = robot.heading;
 
@@ -1578,9 +2114,13 @@ function updateRobot(dt) {
   const chasing = robot.mode === 'chase';
   u.sirenL.material.emissiveIntensity = chasing ? 0.4 + Math.abs(Math.sin(time*8))*2.4 : 0.25;
   u.sirenR.material.emissiveIntensity = chasing ? 0.4 + Math.abs(Math.cos(time*8))*2.4 : 0.25;
-  u.eyes.forEach(e => e.material.emissiveIntensity = chasing ? 3.2 : (phase === 'night' ? 1.4 : 0.5));
   // днём светло — фонарики выключены, он просто ездит и убирается
   const dayNow = phase !== 'night';
+  const eyeHex = dayNow ? 0x38bdf8 : 0xff2b2b;         // 👀 до сбоя глазки голубые
+  u.eyes.forEach(e => {
+    e.material.color.setHex(eyeHex); e.material.emissive.setHex(eyeHex);
+    e.material.emissiveIntensity = chasing ? 3.2 : (dayNow ? 0.9 : 1.4);
+  });
   tills.forEach(t => { t.screen.material.emissiveIntensity = dayNow ? 0.15 : 1.2;
                        t.screen.material.color.setHex(dayNow ? 0x334155 : 0x35e07a); });
   u.lamps.forEach(L => L.intensity = dayNow ? 0 : 20);
@@ -1601,7 +2141,12 @@ function updateRobot(dt) {
       }
     }
   }
-  u.mouth.material.emissiveIntensity = robot.sucking ? 1.2 : 0.2;
+  // подъехал к мусору — включает пылесос и засасывает его на ходу
+  const nearTrash = robot.trash && Math.hypot(robot.trash.x-robot.x, robot.trash.z-robot.z) < 6;
+  const vacRun = robot.sucking || nearTrash;
+  if (vacRun) suckTrash(dt, 1);
+  updateFlow(u, vacRun, dt);
+  u.mouth.material.emissiveIntensity = vacRun ? 1.4 : 0.2;
 }
 
 /* ---------- люди ---------- */
@@ -1639,7 +2184,7 @@ function updateActor(a, dt) {
 
     // бег: кнопкой-переключателем 🏃, либо зажатым Shift, либо джойстиком до упора
     const running = runOn || keys.ShiftLeft || keys.ShiftRight || Math.hypot(stickVec.x,stickVec.y) > 0.75;
-    let sp = ((l || thr) ? (running ? CFG.run : CFG.walk) : 0);
+    let sp = ((l || thr) ? (running ? CFG.run : CFG.walk) : 0) * upgMul('speed');
     if (inPuddle(a)) { sp *= 0.42; a.wet = 0.6; }        // 💧 в луже вязнешь
     else if (a.wet > 0) a.wet -= dt;
 
@@ -1660,6 +2205,8 @@ function updateActor(a, dt) {
     a.vx += (wx*sp - a.vx) * Math.min(1, dt*10);
     a.vz += (wz*sp - a.vz) * Math.min(1, dt*10);
     a.speed = sp;
+  } else if (asRobot) {
+    updateShopper(a, dt);                          // умный бот: магазин, касса, люк
   } else {
     // покупатели: бродят, а увидев робота рядом — в панике убегают
     a.retarget -= dt;
@@ -1697,6 +2244,97 @@ function updateActor(a, dt) {
   animateChar(a.mesh, Math.hypot(a.vx, a.vz), time);
 }
 
+/* ---------- умный покупатель (режим за Робота-Дефекта) ----------
+   У каждого 3 жизни. Он собирает по магазину три товара, несёт их на кассу,
+   иногда мусорит на пол, на бегу прыгает и толкает соседей,
+   а сдав три списка — сбегает через настоящий люк. */
+function pickShelfSpot() {
+  const it = shelfItems[Math.floor(Math.random()*shelfItems.length)];
+  return it ? { x: it.x, z: it.z } : { x:(Math.random()-0.5)*50, z:(Math.random()-0.5)*60 };
+}
+function nearestTill(a) {
+  let b = tills[0], bd = 1e9;
+  for (const t of tills) { const d = Math.hypot(t.x-a.x, t.z-a.z); if (d < bd) { bd = d; b = t; } }
+  return b;
+}
+function nearestRealHatch(a) {
+  let b = null, bd = 1e9;
+  for (const h of hatches) { if (!h.real) continue;
+    const d = Math.hypot(h.x-a.x, h.z-a.z); if (d < bd) { bd = d; b = h; } }
+  return b;
+}
+function botLitter(a) {
+  const ids = Object.keys(ITEMS), id = ids[Math.floor(Math.random()*ids.length)];
+  const m = makeItem(id); m.position.set(a.x, 0.05, a.z); scene.add(m);
+  dropped.push({ id, mesh:m, x:a.x, z:a.z });
+  a.carry = Math.max(0, a.carry - 1);
+}
+function botEscape(a) {
+  a.alive = false; a.escaped = true; escapedCount++;
+  scene.remove(a.mesh); sfx('chime');
+  bigMsg('🕳 ПОКУПАТЕЛЬ СБЕЖАЛ · ушло ' + escapedCount, 1.5, '#8affc0');
+  checkRobotEnd();
+}
+function updateShopper(a, dt) {
+  a.hitCD = Math.max(0, (a.hitCD || 0) - dt);
+  a.goalT -= dt;
+  const dR = robot ? Math.hypot(a.x-robot.x, a.z-robot.z) : 99;
+  if (dR < 14) a.panic = Math.max(a.panic, 2.0);
+
+  let tx = a.x, tz = a.z, sp = CFG.walk;
+  if (a.panic > 0) {
+    a.panic -= dt; sp = CFG.run;
+    const ax = a.x-robot.x, az = a.z-robot.z, l = Math.hypot(ax,az) || 1;
+    tx = a.x + ax/l*12; tz = a.z + az/l*12;
+    if (a.y <= 0.001 && (inPuddle(a) || Math.random() < dt*0.8)) { a.vy = CFG.jumpV; }   // прыгает
+    if (a.actT === undefined) a.actT = 0;
+    a.actT -= dt;
+    if (a.actT <= 0) {                              // толкает соседа, чтобы удрать самому
+      for (const o of actors) {
+        if (o === a || !o.alive || o.isPlayer) continue;
+        const px = o.x-a.x, pz = o.z-a.z, pl = Math.hypot(px,pz) || 1;
+        if (pl < CFG.pushDist && Math.random() < 0.6) {
+          o.vx = px/pl*CFG.pushForce; o.vz = pz/pl*CFG.pushForce;
+          o.shove = 0.8; o.panic = 3; a.actT = 2.5; sfx('push'); break;
+        }
+      }
+    }
+  } else if (a.lists >= 3) {                        // три списка сданы — на выход
+    const h = nearestRealHatch(a);
+    if (h) {
+      tx = h.x; tz = h.z; sp = CFG.run;
+      if (Math.hypot(tx-a.x, tz-a.z) < 1.7) { botEscape(a); return; }
+    }
+  } else if (a.carry >= 3) {                        // руки полные — на кассу
+    const t = nearestTill(a);
+    tx = t.x; tz = t.z + 3;
+    if (Math.hypot(tx-a.x, tz-a.z) < 3.0) {
+      sp = 0;
+      a.scanT = (a.scanT === null || a.scanT === undefined) ? 1.4 : a.scanT - dt;
+      if (a.scanT <= 0) {
+        a.scanT = null; a.carry = 0; a.lists++;
+        sfx('chime'); bigMsg('🧾 Покупатель сдал список ' + a.lists + '/3', 1.1, '#ffd24a');
+      }
+    }
+  } else {                                          // ходит по полкам и набирает товар
+    if (!a.spot || a.goalT <= 0) { a.spot = pickShelfSpot(); a.goalT = 12; }
+    tx = a.spot.x; tz = a.spot.z;
+    if (Math.hypot(tx-a.x, tz-a.z) < 2.6) {
+      a.carry++; a.spot = null; a.goalT = 0; sfx('take');
+      if (Math.random() < 0.45) botLitter(a);       // намусорил
+    }
+  }
+
+  if (sp > 0) {
+    const way = pathPoint(a, tx, tz, dt, a.r);      // обходит стеллажи, а не упирается
+    const dir = Math.atan2(way.x-a.x, way.z-a.z);
+    a.vx += (Math.sin(dir)*sp - a.vx) * Math.min(1, dt*6);
+    a.vz += (Math.cos(dir)*sp - a.vz) * Math.min(1, dt*6);
+  }
+  a.speed = sp;
+  if (Math.hypot(a.vx, a.vz) > 0.3) a.heading = Math.atan2(a.vx, a.vz);
+}
+
 /* ---------- камера из-за спины ---------- */
 function updateRobotCamera(dt) {
   const dist = 9, height = 5 + pitch*4;
@@ -1725,6 +2363,7 @@ function loop(now) {
       if (robot) updateRobot(dt);
       updateTorch();
       updateFx(dt);
+      updateBarriers();
       updatePuddles(dt);
       updateCamera(dt);
     }
@@ -1775,6 +2414,8 @@ $('ctrlHint').textContent = isTouch
   ? 'Телефон: джойстик — идти, палец — камера. Тапни по товару — он в инвентаре, тапни по кассе — список и скан. 🔦 включает фонарик'
   : 'ПК: стрелки ↑↓←→ (как в Паучьем лабиринте) или WASD + мышь. Shift — бег, Пробел — прыжок. Клик по товару — взять, по кассе — список и скан. G — фонарик, F — толкнуть, Q — выбросить';
 $('startBtn').addEventListener('click', startGame);
+$('shopBtn').addEventListener('click', openShop);
+$('shopBack').addEventListener('click', closeShop);
 $('fsBtn').addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch(()=>{});
@@ -1827,9 +2468,74 @@ window.__dbg = {
   get yaw(){ return yaw; },
   toggleTorch(){ setTorch(!torchOn); },
   get trash(){ return dropped.length; },
+  // — монеты, улучшения, скины —
+  get coins(){ return coins; },
+  get bank(){ return coinsBank(); },
+  setBank(n){ setCoinsBank(n); refreshMenu(); },
+  get upg(){ return JSON.parse(JSON.stringify(upgrades)); },
+  setUpg(k, l){ upgrades[k] = l; saveProgress(); },
+  resetUpg(){ for (const k of Object.keys(UPG)) upgrades[k] = 0; saveProgress(); },
+  buy(k){ buyUpgrade(k); return upgLvl(k); },
+  price(k){ return upgPrice(k); },
+  get maxed(){ return allMaxed(); },
+  get skins(){ return { gold:skinGold, ghost:skinGhost, goldOn:goldActive(), ghostOn:ghostActive() }; },
+  openShop(){ openShop(); },
+  // — пылесос и мусор —
+  get flowOn(){ return robot ? robot.mesh.userData.flow.visible : null; },
+  get trashInfo(){ return (robot && robot.trash) ? { d:Math.hypot(robot.trash.x-robot.x, robot.trash.z-robot.z) } : null; },
+  setVac(v){ setVac(v); },
+  get vacOn(){ return vacOn; },
+  get battery(){ return battery; },
+  get cleaned(){ return cleaned; },
+  dropTrashAt(x, z){ const m = makeItem('apple'); m.position.set(x, 0.05, z); scene.add(m);
+                     dropped.push({ id:'apple', mesh:m, x, z }); return dropped.length; },
+  // кладёт мусор в свободной точке прямо перед роботом — для проверки засоса
+  dropTrashAhead(){
+    for (let k=0;k<24;k++) {
+      const ang = robot.heading + Math.PI + k*0.52;
+      const x = robot.x + Math.sin(ang)*2.6, z = robot.z + Math.cos(ang)*2.6;
+      if (!freeAt(x, z, 0.8)) continue;
+      const m = makeItem('apple'); m.position.set(x, 0.05, z); scene.add(m);
+      dropped.push({ id:'apple', mesh:m, x, z });
+      return { n:dropped.length, x:+x.toFixed(1), z:+z.toFixed(1) };
+    }
+    return null;
+  },
+  // — боты —
+  get bots(){ return actors.filter(a => !a.isPlayer).map(a =>
+      ({ lives:a.lives, lists:a.lists, carry:a.carry, alive:a.alive, escaped:a.escaped,
+         x:+a.x.toFixed(1), z:+a.z.toFixed(1) })); },
+  get escaped2(){ return escapedCount; },
+  get caught(){ return caught; },
+  get shoppers(){ return shoppersTotal; },
+  botTo(i, x, z){ const b = actors.filter(a => !a.isPlayer)[i]; if (!b) return null; b.x = x; b.z = z; return true; },
+  setBotLists(i, n){ const b = actors.filter(a => !a.isPlayer)[i]; if (b) b.lists = n; },
+  botInfo(i){ const b = actors.filter(a => !a.isPlayer)[i]; if (!b) return null;
+    const h = nearestRealHatch(b);
+    return { lists:b.lists, carry:b.carry, panic:+(b.panic||0).toFixed(1), alive:b.alive,
+             доЛюка: h ? +Math.hypot(h.x-b.x, h.z-b.z).toFixed(1) : null,
+             скорость:+Math.hypot(b.vx,b.vz).toFixed(1) }; },
+  startRobot(){ startRobotMode(); },
+  setRobotTime(t){ robotLeft = t; },
+  // — ленты «мокрый пол» —
+  get barriers(){ return barriers.length; },
+  barrierAt(i){ const b = barriers[i]; return b ? { x:b.x, z:b.z, horiz:b.horiz } : null; },
+  // встать в свободной точке и посмотреть на цель — для проверочных скриншотов
+  lookAtSpot(tx, tz, dist){
+    for (let k=0;k<36;k++) {
+      const a = k*Math.PI/18, px = tx + Math.sin(a)*(dist||8), pz = tz + Math.cos(a)*(dist||8);
+      if (!freeAt(px, pz, 1.0)) continue;
+      player.x = px; player.z = pz; yaw = Math.atan2(tx-px, tz-pz); player.heading = yaw;
+      return { x:+px.toFixed(1), z:+pz.toFixed(1) };
+    }
+    return null;
+  },
+  addBarrierNow(){ const sp = findBarrierSpot(); if (!sp) return null; addBarrier(sp.x, sp.z, sp.horiz); return barriers.length; },
+  get solids(){ return solids.length; },
   get run(){ return runOn; },
   toggleRun(){ setRun(!runOn); },
   get robotLamps(){ return robot ? robot.mesh.userData.lamps[0].intensity : null; },
+  get eyeColor(){ return robot ? '#' + robot.mesh.userData.eyes[0].material.color.getHexString() : null; },
   get magnets(){ return magnets; },
   get stun(){ return robotStun; },
   giveMagnet(){ magnets++; updateMagBtn(); },
