@@ -158,7 +158,7 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png">
   <meta name="msapplication-TileImage" content="icon-192.png">
   <meta name="msapplication-TileColor" content="#6b21a8">
-  <script>window.__APP_VER = "fdb1c1356e";</script>
+  <script>window.__APP_VER = "9a9afe080d";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -182,7 +182,7 @@
   </div>
   <button class="btn" id="startBtn">В МАГАЗИН</button>
   <button class="btn" id="startBtn2" style="background:linear-gradient(180deg,#a7f3d0,#0f766e);box-shadow:0 6px 0 #134e4a,0 12px 24px #0007">👥 ВДВОЁМ НА ОДНОМ ЭКРАНЕ</button>
-  <button class="btn hidden" id="robotBtn" style="background:linear-gradient(180deg,#fca5a5,#b91c1c);box-shadow:0 6px 0 #7f1d1d,0 12px 24px #0007">🤖 ИГРАТЬ ЗА РОБОТА-ДЕФЕКТА</button>
+  <button class="btn" id="robotBtn" style="background:linear-gradient(180deg,#fca5a5,#b91c1c);box-shadow:0 6px 0 #7f1d1d,0 12px 24px #0007">🤖 ИГРАТЬ ЗА РОБОТА-ДЕФЕКТА</button>
   <button class="btn" id="shopBtn" style="background:linear-gradient(180deg,#fde68a,#b45309);box-shadow:0 6px 0 #78350f,0 12px 24px #0007;color:#2a1500">🛒 УЛУЧШЕНИЯ · <span id="menuCoins">0</span> 🪙</button>
   <div class="sub" style="font-size:12px;opacity:.7" id="ctrlHint"></div>
 </div>
@@ -1799,7 +1799,13 @@ let vacNoise = null, vacOsc = null, vacGain = null;
 
 function escapedBefore() { try { return localStorage.getItem('nightshift_escaped') === '1'; } catch (_) { return false; } }
 function refreshMenu() {
-  $('robotBtn').classList.toggle('hidden', !escapedBefore());
+  // ⚠️ Жалоба Марка 12.09: «не дают играть за Робота-Дефекта». Раньше кнопка пряталась,
+  //    пока хоть раз не сбежишь из магазина — и новый игрок её просто не видел.
+  //    Теперь режим открыт СРАЗУ, а «сбегал раньше» только меняет подпись.
+  $('robotBtn').classList.remove('hidden');
+  $('robotBtn').textContent = escapedBefore()
+    ? '🤖 ИГРАТЬ ЗА РОБОТА-ДЕФЕКТА'
+    : '🤖 ИГРАТЬ ЗА РОБОТА-ДЕФЕКТА · бонус-режим';
   $('menuCoins').textContent = coinsBank();
 }
 
