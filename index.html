@@ -158,7 +158,7 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png">
   <meta name="msapplication-TileImage" content="icon-192.png">
   <meta name="msapplication-TileColor" content="#6b21a8">
-  <script>window.__APP_VER = "9c83ed3c29";</script>
+  <script>window.__APP_VER = "fdb1c1356e";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -359,12 +359,12 @@ function nightTex(w,h,draw){const c=document.createElement('canvas');c.width=w;c
 const nightNoise=(x,y)=>{const a=Math.sin(x*127.1+y*311.7)*43758.5453;return a-Math.floor(a);};
 const nightGrain=nightTex(128,128,(g,w,h)=>{g.fillStyle='#ddd';g.fillRect(0,0,w,h);for(let y=0;y<h;y+=2)for(let x=0;x<w;x+=2){const v=190+nightNoise(x,y)*65;g.fillStyle=`rgb(${v},${v},${v})`;g.fillRect(x,y,1,1);}});nightGrain.colorSpace=THREE.NoColorSpace;nightGrain.wrapS=nightGrain.wrapT=THREE.RepeatWrapping;
 const nightWeave=nightTex(128,128,(g,w,h)=>{g.fillStyle='#aaa';g.fillRect(0,0,w,h);for(let i=0;i<128;i+=4){g.fillStyle='#ddd';g.fillRect(i,0,1,h);g.fillStyle='#858585';g.fillRect(0,i,w,1);}});nightWeave.colorSpace=THREE.NoColorSpace;nightWeave.wrapS=nightWeave.wrapT=THREE.RepeatWrapping;nightWeave.repeat.set(4,4);
-function nightMat(color,roughness=.65,metalness=.04){const m=new THREE.MeshPhysicalMaterial({color,roughness,metalness,clearcoat:roughness<.6?.35:.05,clearcoatRoughness:.25,envMapIntensity:.22});nightArt.materials.add(m);return m;}
+function nightMat(color,roughness=.65,metalness=.04){const m=new THREE.MeshPhysicalMaterial({color,roughness,metalness,clearcoat:roughness<.6?.35:.05,clearcoatRoughness:.25,envMapIntensity:nightArt.phase===true?.035:.24});nightArt.materials.add(m);return m;}
 function nightRounded(w,h,d,r=Math.min(w,h,d)*.12){const key=[w,h,d,r].join(',');if(nightArt.geo.has(key))return nightArt.geo.get(key);const geo=new THREE.BoxGeometry(w,h,d,3,3,3),p=geo.attributes.position,v=new THREE.Vector3(),q=new THREE.Vector3();r=Math.min(r,w/2,h/2,d/2);for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i);q.set(Math.max(-w/2+r,Math.min(w/2-r,v.x)),Math.max(-h/2+r,Math.min(h/2-r,v.y)),Math.max(-d/2+r,Math.min(d/2-r,v.z)));v.sub(q).normalize().multiplyScalar(r).add(q);p.setXYZ(i,v.x,v.y,v.z);}geo.computeVertexNormals();nightArt.geo.set(key,geo);return geo;}
 function nightBox(parent,w,h,d,x,y,z,mat){const m=new THREE.Mesh(nightRounded(w,h,d),mat);m.position.set(x,y,z);parent.add(m);return m;}
 function nightRoundMeshes(g){g.traverse(m=>{if(m.isMesh&&m.geometry.type==='BoxGeometry'){const p=m.geometry.parameters;m.geometry=nightRounded(p.width,p.height,p.depth);}});}
 function nightLabel(title,subtitle,color='#7dd3fc',dark='#142334'){return nightTex(1024,192,(g,w,h)=>{g.fillStyle=dark;g.fillRect(0,0,w,h);g.fillStyle=color;g.fillRect(0,0,12,h);g.fillRect(28,h-19,w-56,3);g.textAlign='left';g.fillStyle='#f8fafc';g.font='800 58px system-ui';g.fillText(title,36,84);g.fillStyle=color;g.font='500 25px system-ui';g.fillText(subtitle,39,131);g.globalAlpha=.45;for(let x=895;x<975;x+=7){g.fillRect(x,40,(x%3)+1,88);}g.globalAlpha=1;});}
-function nightSurface(map,glow=0){const m=new THREE.MeshStandardMaterial({map,emissiveMap:glow?map:null,emissive:glow?0xffffff:0x000000,emissiveIntensity:glow,roughness:.62,metalness:.04,envMapIntensity:.15});nightArt.materials.add(m);return m;}
+function nightSurface(map,glow=0){const m=new THREE.MeshStandardMaterial({map,emissiveMap:glow?map:null,emissive:glow?0xffffff:0x000000,emissiveIntensity:glow,roughness:.62,metalness:.04,envMapIntensity:nightArt.phase===true?.035:.24});nightArt.materials.add(m);return m;}
 const nightDept={fruit:{color:0x517b46,ink:'#b5db87',wood:0x735437,title:'ФРУКТЫ И ОВОЩИ',sub:'01  /  СВЕЖИЙ УРОЖАЙ'},cloth:{color:0x734255,ink:'#f5c6d6',wood:0xc5a182,title:'ОДЕЖДА',sub:'02  /  ГОРОДСКОЙ ГАРДЕРОБ'},tech:{color:0x243e56,ink:'#70d9f4',wood:0x334152,title:'ЭЛЕКТРОНИКА',sub:'03  /  ТЕХНОЛОГИИ РЯДОМ'}};
 for(const d of Object.values(nightDept)){d.label=nightLabel(d.title,d.sub,d.ink);d.price=nightTex(1024,64,(g,w,h)=>{g.fillStyle='#f5f1e7';g.fillRect(0,0,w,h);for(let x=0;x<w;x+=128){g.fillStyle='#b6b9b5';g.fillRect(x,0,2,h);g.fillStyle='#354253';g.font='700 17px monospace';g.fillText('ТОВАР',x+10,23);g.font='700 23px monospace';g.fillText('99.90',x+10,51);for(let k=85;k<119;k+=3)g.fillRect(x+k,16,(k%2)+1,37);}});d.edge=nightMat(d.color,.48,.12);d.frame=nightMat(d.wood,.63,.08);d.labels=nightSurface(d.price);}
 const nightWood=nightTex(256,128,(g,w,h)=>{g.fillStyle='#e8d1ac';g.fillRect(0,0,w,h);for(let y=0;y<h;y+=3){g.strokeStyle=`rgba(68,38,18,${.04+nightNoise(y,8)*.16})`;g.beginPath();g.moveTo(0,y);for(let x=0;x<w;x+=16)g.lineTo(x,y+Math.sin(x*.03+y)*1.8);g.stroke();}});nightWood.wrapS=nightWood.wrapT=THREE.RepeatWrapping;
