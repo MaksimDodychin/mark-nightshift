@@ -61,6 +61,25 @@
 
   #stick { position:fixed; left:16px; bottom:16px; width:118px; height:118px; z-index:20; border-radius:50%;
     background:#ffffff10; border:2px solid #ffffff2a; touch-action:none; display:none; }
+  /* ═══ 👥 ВДВОЁМ (заказ Марка 12.09.2026): сверху 1-й охранник, снизу 2-й ═══ */
+  body.coop #stick { left:12px; bottom:calc(50% + 12px); width:92px; height:92px; }
+  #dpad2 { position:fixed; left:12px; bottom:12px; z-index:20; display:none;
+    grid-template-columns:repeat(3,48px); grid-template-rows:repeat(3,48px); gap:6px; touch-action:none; }
+  body.coop #dpad2 { display:grid; }
+  #dpad2 .d2 { display:flex; align-items:center; justify-content:center; font-size:20px; color:#fff;
+    background:radial-gradient(circle at 35% 30%,#6a6a8a,#34344a); border:2px solid #ffffff44;
+    border-radius:12px; user-select:none; }
+  #dpad2 .d2:active, #dpad2 .d2.on { transform:scale(.92); background:radial-gradient(circle at 35% 30%,#8a8ab0,#4a4a66); }
+  #d2U{grid-column:2;grid-row:1} #d2L{grid-column:1;grid-row:2} #d2R{grid-column:3;grid-row:2} #d2D{grid-column:2;grid-row:3}
+  #splitLine { position:fixed; left:0; right:0; top:50%; height:4px; margin-top:-2px; z-index:19;
+    background:linear-gradient(90deg,#0000,#ffffffcc,#0000); display:none; pointer-events:none; }
+  body.coop #splitLine { display:block; }
+  .coopTag { position:fixed; right:12px; z-index:19; display:none; background:#0e1b38cc;
+    border:2px solid #ffffff33; border-radius:12px; padding:4px 10px; font-weight:900; font-size:14px; }
+  .coopTag { left:50%; transform:translateX(-50%); right:auto; }
+  .coopTag.p1 { top:calc(50% - 34px); border-color:#7CFC9B88; } .coopTag.p2 { top:calc(50% + 10px); border-color:#ffd34d88; }
+  body.coop .coopTag { display:block; }
+  body.coop #actions { bottom:calc(50% + 12px); }
   #knob { position:absolute; left:50%; top:50%; width:52px; height:52px; margin:-26px 0 0 -26px; border-radius:50%;
     background:#ffffff44; border:2px solid #ffffff66; }
   #actions { position:fixed; right:14px; bottom:16px; z-index:20; display:flex; flex-direction:column; gap:10px; }
@@ -139,7 +158,7 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png">
   <meta name="msapplication-TileImage" content="icon-192.png">
   <meta name="msapplication-TileColor" content="#6b21a8">
-  <script>window.__APP_VER = "c6ff149d7b";</script>
+  <script>window.__APP_VER = "7764187bfb";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -162,6 +181,7 @@
     Сегодня двери закрылись, когда покупатели были внутри. Ты — второй охранник.
   </div>
   <button class="btn" id="startBtn">В МАГАЗИН</button>
+  <button class="btn" id="startBtn2" style="background:linear-gradient(180deg,#a7f3d0,#0f766e);box-shadow:0 6px 0 #134e4a,0 12px 24px #0007">👥 ВДВОЁМ НА ОДНОМ ЭКРАНЕ</button>
   <button class="btn hidden" id="robotBtn" style="background:linear-gradient(180deg,#fca5a5,#b91c1c);box-shadow:0 6px 0 #7f1d1d,0 12px 24px #0007">🤖 ИГРАТЬ ЗА РОБОТА-ДЕФЕКТА</button>
   <button class="btn" id="shopBtn" style="background:linear-gradient(180deg,#fde68a,#b45309);box-shadow:0 6px 0 #78350f,0 12px 24px #0007;color:#2a1500">🛒 УЛУЧШЕНИЯ · <span id="menuCoins">0</span> 🪙</button>
   <div class="sub" style="font-size:12px;opacity:.7" id="ctrlHint"></div>
@@ -197,6 +217,10 @@
 <div id="hint" class="hidden"></div>
 
 <div id="stick"><div id="knob"></div></div>
+<div id="dpad2"><div class="d2" id="d2U">▲</div><div class="d2" id="d2L">◀</div><div class="d2" id="d2R">▶</div><div class="d2" id="d2D">▼</div></div>
+<div id="splitLine"></div>
+<div class="coopTag p1">🟢 1-й охранник</div>
+<div class="coopTag p2">🟡 2-й охранник</div>
 <div id="actions" class="hidden">
   <button class="abtn" id="listBtn" title="Список">📋</button>
   <button class="abtn" id="takeBtn" title="Взять / сканировать">✋</button>
@@ -323,7 +347,40 @@ const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// 🎨 мягкие тени и киношная тонировка — как в остальных играх
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
 document.body.appendChild(renderer.domElement);
+/* 🖼 рисованные текстуры: плитка пола и крашеные панели стен. Без картинок —
+   всё рисуем сами на canvas, чтобы игра осталась одним файлом и работала офлайн. */
+function холст(w, h, рисуй) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  рисуй(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t;
+}
+const texПол = холст(256, 256, (g, w, h) => {
+  g.fillStyle = '#d5d0c4'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 2200; i++) {                       // крапинка «керамогранит»
+    g.fillStyle = 'rgba(0,0,0,' + (0.02 + Math.random()*0.05).toFixed(3) + ')';
+    g.fillRect(Math.random()*w, Math.random()*h, 2, 2);
+  }
+  g.strokeStyle = '#9d9789'; g.lineWidth = 5;            // швы между плитками
+  for (const k of [0, 128]) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, h); g.moveTo(0, k); g.lineTo(w, k); g.stroke(); }
+  g.fillStyle = 'rgba(255,255,255,.35)';                 // блик на каждой плитке
+  for (const [x, y] of [[10,10],[138,10],[10,138],[138,138]]) g.fillRect(x, y, 60, 8);
+});
+texПол.repeat.set(14, 18);
+const texСтена = холст(256, 256, (g, w, h) => {
+  g.fillStyle = '#e7e9ee'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#dfe2e9';
+  for (let y = 0; y < h; y += 64) g.fillRect(0, y, w, 32);
+  g.strokeStyle = '#c8ccd6'; g.lineWidth = 3;
+  for (let x = 0; x <= w; x += 85) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+});
+texСтена.repeat.set(6, 2);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0810);
@@ -333,6 +390,16 @@ scene.add(camera);
 
 const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x3a3040, 0.9); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(10,30,10); scene.add(sun);
+// ☀️ солнце теперь бросает мягкую тень на весь зал
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+sun.shadow.camera.top = 60;  sun.shadow.camera.bottom = -60;
+sun.shadow.camera.near = 1;  sun.shadow.camera.far = 90;
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
+sun.target.position.set(0, 0, 0); scene.add(sun.target);
+// 💡 подсветка с обратной стороны: без неё тёмный бок предметов уходит в черноту
+const fill = new THREE.DirectionalLight(0xbcd0ff, 0.22); fill.position.set(-14, 18, -16); scene.add(fill);
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
@@ -340,6 +407,18 @@ addEventListener('resize', () => {
 });
 
 const plastic = (c,r=0.7) => new THREE.MeshStandardMaterial({ color:c, roughness:r, metalness:0.05 });
+const текТень = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(32,32,2,32,32,31);
+  gr.addColorStop(0,'rgba(0,0,0,0.55)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+})();
+const матТень = new THREE.MeshBasicMaterial({ map:текТень, transparent:true, depthWrite:false });
+function подушкаТени(размер) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(размер, размер), матТень);
+  m.rotation.x = -Math.PI/2; m.position.y = 0.03; scene.add(m); return m;
+}
 const metalM  = c => new THREE.MeshStandardMaterial({ color:c, metalness:0.9, roughness:0.25 });
 const emisM   = (c,i=1.4) => new THREE.MeshStandardMaterial({ color:c, emissive:c, emissiveIntensity:i, roughness:0.35 });
 
@@ -362,25 +441,23 @@ const lampRows = [];             // ряды ламп — они и будут �
   const W = HALL.w/2, D = HALL.d/2, T = 0.6, H = HALL.h;
   // пол
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALL.w, HALL.d),
-    new THREE.MeshStandardMaterial({ color:0xd8d5cc, roughness:0.6 }));
-  floor.rotation.x = -Math.PI/2; store.add(floor);
-  // плиточная разметка
-  for (let i=-W; i<=W; i+=4) {
-    const l = new THREE.Mesh(new THREE.PlaneGeometry(0.06, HALL.d), new THREE.MeshBasicMaterial({ color:0xbdb9ae }));
-    l.rotation.x = -Math.PI/2; l.position.set(i, 0.01, 0); store.add(l);
-  }
-  for (let i=-D; i<=D; i+=4) {
-    const l = new THREE.Mesh(new THREE.PlaneGeometry(HALL.w, 0.06), new THREE.MeshBasicMaterial({ color:0xbdb9ae }));
-    l.rotation.x = -Math.PI/2; l.position.set(0, 0.01, i); store.add(l);
-  }
+    new THREE.MeshStandardMaterial({ map:texПол, roughness:0.34, metalness:0.06 }));
+  floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; store.add(floor);
+  // швы плитки теперь нарисованы прямо в текстуре пола — отдельные полоски не нужны
   // потолок и стены
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(HALL.w, HALL.d), plastic(0x2a2733, 1));
   ceil.rotation.x = Math.PI/2; ceil.position.y = H; store.add(ceil);
-  const wallMat = plastic(0xb9c4d0, 0.9);
+  const wallMat = new THREE.MeshStandardMaterial({ map:texСтена, roughness:0.85, metalness:0.04 });
   box(-W-T, -W, -D-T, D+T, H, 0, wallMat);
   box( W,  W+T, -D-T, D+T, H, 0, wallMat);
   box(-W-T, W+T, -D-T, -D, H, 0, wallMat);
   box(-W-T, W+T,  D,   D+T, H, 0, wallMat);
+  // 🧱 плинтус по периметру — стена перестаёт «висеть» над полом
+  const плинтус = plastic(0x6b7280, 0.8);
+  box(-W-T, -W+0.12, -D-T, D+T, 0.35, 0, плинтус, false);
+  box( W-0.12, W+T, -D-T, D+T, 0.35, 0, плинтус, false);
+  box(-W-T, W+T, -D-T, -D+0.12, 0.35, 0, плинтус, false);
+  box(-W-T, W+T,  D-0.12, D+T, 0.35, 0, плинтус, false);
 
   // ряды ламп под потолком (гаснут по очереди при закрытии магазина)
   for (let r=0; r<6; r++) {
@@ -388,6 +465,8 @@ const lampRows = [];             // ряды ламп — они и будут �
     const row = { lights:[], meshes:[] };
     for (let c=-1; c<=1; c++) {
       const x = c * (HALL.w/3.4);
+      const корпус = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.34, 0.86), plastic(0x8b93a3, 0.5));
+      корпус.position.set(x, H-0.18, z); store.add(корпус);
       const tube = new THREE.Mesh(new THREE.BoxGeometry(9, 0.18, 0.5), emisM(0xfff6e0, 1.1));
       tube.position.set(x, H-0.35, z); store.add(tube);
       const L = new THREE.PointLight(0xfff2d8, 80, 46, 2); L.position.set(x, H-0.8, z); store.add(L);
@@ -395,6 +474,9 @@ const lampRows = [];             // ряды ламп — они и будут �
     }
     lampRows.push(row);
   }
+  // 🌑 тени: всё в магазине отбрасывает и принимает мягкую тень
+  store.traverse(o => { if (o.isMesh && o.geometry && o.geometry.type !== 'PlaneGeometry') {
+    o.castShadow = true; o.receiveShadow = true; } });
 })();
 
 /* =========================================================================
@@ -922,6 +1004,7 @@ let player = null, robot = null;
 
 function spawnChar(x, z, hex, isPlayer) {
   const mesh = makeChar(hex, isPlayer);
+  mesh.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   mesh.position.set(x, 0, z); scene.add(mesh);
   const a = { mesh, x, z, y:0, vy:0, heading:0, isPlayer, alive:true,
               vx:0, vz:0, panic:0, target:null, retarget:0, r:CFG.playerR };
@@ -935,12 +1018,14 @@ function spawnChar(x, z, hex, isPlayer) {
       pip.position.set((i-1)*0.22, 2.18, 0); mesh.add(pip); a.pips.push(pip);
     }
   }
+  a.тень = подушкаТени(1.9);
   actors.push(a);
   return a;
 }
 
 function spawnRobot(x, z) {
   const mesh = buildRobot();
+  mesh.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
   mesh.position.set(x, 0, z); scene.add(mesh);
   robot = { mesh, x, z, heading:0, mode:'patrol', target:null, wp:0, sucking:false,
             r:CFG.robotR, seeT:0, hunt:0, hx:0, hz:0, trash:null };
@@ -1103,6 +1188,14 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 const isTouch = matchMedia('(pointer:coarse)').matches;
 let look = null, stickId = null, stickVec = { x:0, y:0 };
 let yaw = 0, pitch = 0.1;
+/* ═══ 👥 ВДВОЁМ НА ОДНОМ ЭКРАНЕ (заказ Марка 12.09.2026) ═══
+   Сверху — первый охранник, снизу — второй. Второй ходит «танком» (вперёд-назад + повороты)
+   на своём крестике в нижнем левом углу своей половины, на компьютере — W A S D.
+   Робот-Дефект гоняется за тем, кого увидит: он и так смотрит на ВСЕХ, кто ходит.
+   Сердца общие — попались оба, значит смена провалена вместе. */
+let вдвоём = false, player2 = null, yaw2 = 0;
+const camera2 = new THREE.PerspectiveCamera(62, 1, 0.05, 200);
+const d2 = { u:0, d:0, l:0, r:0 };
 
 renderer.domElement.addEventListener('pointerdown', e => {
   if (state !== 'play') return;
@@ -1137,6 +1230,14 @@ function updStick(cx, cy) {
   stickVec = { x: dx/max, y: dy/max };
   $('knob').style.transform = `translate(${dx}px,${dy}px)`;
 }
+(function(){
+  const bind = (id, k) => { const e = $(id); if (!e) return;
+    const on = ev => { ev.preventDefault(); try { e.setPointerCapture(ev.pointerId); } catch(_){} d2[k] = 1; e.classList.add('on'); };
+    const off = () => { d2[k] = 0; e.classList.remove('on'); };
+    e.addEventListener('pointerdown', on); e.addEventListener('pointerup', off);
+    e.addEventListener('pointercancel', off); e.addEventListener('lostpointercapture', off); };
+  bind('d2U','u'); bind('d2D','d'); bind('d2L','l'); bind('d2R','r');
+})();
 $('jumpBtn').addEventListener('click', doJump);
 $('pushBtn').addEventListener('click', doPush);
 $('takeBtn').addEventListener('click', doTake);
@@ -1146,7 +1247,7 @@ $('runBtn').addEventListener('click', () => setRun(!runOn));
 $('vacBtn').addEventListener('pointerdown', () => setVac(true));
 $('vacBtn').addEventListener('pointerup', () => setVac(false));
 $('vacBtn').addEventListener('pointerleave', () => setVac(false));
-$('startBtn').addEventListener('click', () => { asRobot = false; });
+$('startBtn').addEventListener('click', () => { asRobot = false; вдвоём = false; document.body.classList.remove('coop'); });
 $('robotBtn').addEventListener('click', startRobotMode);
 $('winMenu').addEventListener('click', () => {
   $('winScreen').classList.add('hidden'); $('menu').classList.remove('hidden');
@@ -1393,6 +1494,17 @@ function setTorch(on) {
   $('slotLamp').classList.toggle('sel', on);
   sfx('click');
   hint(on ? '🔦 Фонарик включён' : '🔦 Фонарик выключен');
+}
+const torch2 = new THREE.SpotLight(0xfff4d0, 0, 30, 0.42, 0.55, 1.2);
+torch2.position.set(0, 1.7, 0); scene.add(torch2); scene.add(torch2.target);
+function updateTorch2() {
+  if (!(вдвоём && player2)) { torch2.intensity = 0; return; }
+  const fx = Math.sin(yaw2), fz = Math.cos(yaw2), reach = 14 * upgMul('lamp');
+  torch2.distance = 30 * upgMul('lamp');
+  torch2.position.set(player2.x, 1.7, player2.z);
+  torch2.target.position.set(player2.x + fx*reach, 0.4, player2.z + fz*reach);
+  torch2.target.updateMatrixWorld();
+  torch2.intensity = torchOn ? (phase === 'night' ? 55 : 12) : 0;
 }
 function updateTorch() {
   const fx = Math.sin(yaw), fz = Math.cos(yaw);
@@ -1931,6 +2043,13 @@ function startGame() {
   actors.length = 0;
   scene.children.filter(o => o.userData && o.userData.legs).forEach(o => scene.remove(o));
   player = spawnChar(0, HALL.d/2 - 16, 0x1e3a8a, true);
+  player2 = null;
+  if (вдвоём && !asRobot) {                        // 👥 второй охранник рядом, в жёлтой форме
+    player2 = spawnChar(3, HALL.d/2 - 16, 0xeab308, true);
+    player2.isPlayer = false; player2.isPlayer2 = true;   // свои клавиши, но не «главный»
+    yaw2 = 0;
+  }
+  document.body.classList.toggle('coop', !!(вдвоём && !asRobot));
   const COLORS = [0xef4444,0x22c55e,0xf59e0b,0xec4899,0x06b6d4,0xa855f7];
   for (let i=0;i<6;i++) {
     const a = (i/6)*Math.PI*2;
@@ -1939,7 +2058,7 @@ function startGame() {
   if (robot) scene.remove(robot.mesh);
   spawnRobot(0, -HALL.d/2 + 10);
   yaw = 0; pitch = 0.12;
-  shoppersTotal = actors.filter(a => !a.isPlayer).length;
+  shoppersTotal = actors.filter(a => !a.isPlayer && !a.isPlayer2).length;
   if (asRobot) {
     battery = 100 * upgMul('battery'); vacOn = false; caught = 0; robotLeft = 180;
     phase = 'night'; hemi.intensity = 0.12; sun.intensity = 0.05;
@@ -1948,7 +2067,7 @@ function startGame() {
     stopMusic(); startMusic('night');
     robot.x = player.x; robot.z = player.z;              // роботом играем от места старта
     scene.remove(player.mesh); actors.splice(actors.indexOf(player), 1);
-    shoppersTotal = actors.filter(a => !a.isPlayer).length;
+    shoppersTotal = actors.filter(a => !a.isPlayer && !a.isPlayer2).length;
     hint('Ты Робот-Дефект. 🌀 — пылесос (жрёт батарею). У каждого покупателя 3 жизни, и они умеют сбегать в люк.');
   }
   applySkins();
@@ -1967,8 +2086,9 @@ function scream() {
   } catch (_) {}
 }
 
-function hurtPlayer(why, txt) {
+function hurtPlayer(why, txt, кого) {
   if (state !== 'play') return;
+  const жертва = кого || player;
   hearts--; updateHearts();
   // 😱 СКРИМЕР
   state = 'scare';
@@ -1978,8 +2098,8 @@ function hurtPlayer(why, txt) {
     sc.classList.add('hidden');
     if (hearts <= 0) { loseGame(); return; }
     state = 'play';
-    player.x = -player.x * 0.7; player.z = -player.z * 0.7;   // откидывает в другой конец
-    player.vx = player.vz = 0;
+    жертва.x = -жертва.x * 0.7; жертва.z = -жертва.z * 0.7;   // откидывает в другой конец
+    жертва.vx = жертва.vz = 0;
     if (robot) { robot.mode = 'patrol'; robot.target = null; robot.seeT = 0; }
     bigMsg(why, 1.6, '#ff6b6b');
   }, 1500);
@@ -2136,7 +2256,7 @@ function updateRobot(dt) {
       const pull = CFG.suckPull * (1 - ad/CFG.suckDist);
       a.vx += ax/(ad||1) * pull * dt * 6; a.vz += az/(ad||1) * pull * dt * 6;
       if (ad < CFG.catchDist) {
-        if (a.isPlayer) hurtPlayer('ТЕБЯ СХВАТИЛИ!');
+        if (a.isPlayer || a.isPlayer2) hurtPlayer('ТЕБЯ СХВАТИЛИ!', null, a);
         else { a.x = -a.x; a.z = -a.z; a.panic = 4; }
       }
     }
@@ -2160,10 +2280,28 @@ function updateActor(a, dt) {
     collide(a, a.r);
     a.mesh.position.set(a.x, a.y, a.z);
     a.mesh.rotation.y = Math.atan2(a.vx, a.vz);
+    if (a.тень) { a.тень.position.set(a.x, 0.03, a.z);
+      a.тень.material.opacity = Math.max(0.15, 1 - a.y*0.5); }
     animateChar(a.mesh, 6, time);
     return;
   }
-  if (a.isPlayer) {
+  if (a.isPlayer2) {
+    // 👥 второй охранник: только «танк» — W/S вперёд-назад, A/D повороты, плюс свой крестик
+    let thr = 0, turn = 0;
+    if (keys.KeyW || d2.u) thr += 1;
+    if (keys.KeyS || d2.d) thr -= 1;
+    if (keys.KeyA || d2.l) turn -= 1;
+    if (keys.KeyD || d2.r) turn += 1;
+    a.heading -= turn * CFG.turnSpeed * dt;
+    const dd = ((a.heading - yaw2 + Math.PI*3) % (Math.PI*2)) - Math.PI;
+    yaw2 += dd * Math.min(1, dt*7);
+    let sp2 = (thr ? (keys.ShiftRight ? CFG.run : CFG.walk) : 0) * upgMul('speed');
+    if (inPuddle(a)) sp2 *= 0.42;
+    const wx2 = Math.sin(a.heading) * thr, wz2 = Math.cos(a.heading) * thr;
+    a.vx += (wx2*sp2 - a.vx) * Math.min(1, dt*10);
+    a.vz += (wz2*sp2 - a.vz) * Math.min(1, dt*10);
+    a.speed = sp2;
+  } else if (a.isPlayer) {
     // ── СТРЕЛКИ: танковое управление, как в «Паучьем лабиринте» ──
     // ↑↓ едешь вперёд-назад, ←→ поворачивают тебя, камера идёт за спиной
     let thr = 0, turn = 0;
@@ -2175,10 +2313,12 @@ function updateActor(a, dt) {
 
     // ── WASD и джойстик: движение относительно камеры ──
     let mx = 0, mz = 0;
-    if (keys.KeyW) mz -= 1;
-    if (keys.KeyS) mz += 1;
-    if (keys.KeyA) mx -= 1;
-    if (keys.KeyD) mx += 1;
+    if (!вдвоём) {                       // 👥 вдвоём WASD отданы второму охраннику
+      if (keys.KeyW) mz -= 1;
+      if (keys.KeyS) mz += 1;
+      if (keys.KeyA) mx -= 1;
+      if (keys.KeyD) mx += 1;
+    }
     if (stickId !== null) { mx += stickVec.x; mz += stickVec.y; }
     const l = Math.hypot(mx,mz); if (l > 1) { mx/=l; mz/=l; }
 
@@ -2240,6 +2380,7 @@ function updateActor(a, dt) {
   a.vx *= Math.pow(0.02, dt); a.vz *= Math.pow(0.02, dt);   // трение
   collide(a, a.r);
   a.mesh.position.set(a.x, a.y, a.z);
+  if (a.тень) { a.тень.position.set(a.x, 0.03, a.z); a.тень.material.opacity = Math.max(0.15, 1 - a.y*0.5); }
   a.mesh.rotation.y = a.heading;
   animateChar(a.mesh, Math.hypot(a.vx, a.vz), time);
 }
@@ -2344,11 +2485,31 @@ function updateRobotCamera(dt) {
 }
 
 function updateCamera(dt) {
-  const dist = 8.5, height = 4.6 + pitch*4;
-  const tx = player.x - Math.sin(yaw)*dist;
-  const tz = player.z - Math.cos(yaw)*dist;
-  camera.position.lerp(new THREE.Vector3(tx, player.y + height, tz), 1 - Math.pow(0.0015, dt));
-  camera.lookAt(player.x + Math.sin(yaw)*2, player.y + 1.4, player.z + Math.cos(yaw)*2);
+  камераЗа(player, camera, yaw, pitch, dt);
+  if (вдвоём && player2) камераЗа(player2, camera2, yaw2, 0.1, dt);
+}
+function камераЗа(a, cam, y, p, dt) {
+  const dist = 8.5, height = 4.6 + p*4;
+  const tx = a.x - Math.sin(y)*dist;
+  const tz = a.z - Math.cos(y)*dist;
+  cam.position.lerp(new THREE.Vector3(tx, a.y + height, tz), 1 - Math.pow(0.0015, dt));
+  cam.lookAt(a.x + Math.sin(y)*2, a.y + 1.4, a.z + Math.cos(y)*2);
+}
+const _раз = new THREE.Vector2();
+function рисоватьКадр() {
+  if (вдвоём && player2 && !asRobot) {
+    renderer.getSize(_раз);
+    const w = Math.floor(_раз.x), h = Math.floor(_раз.y), hh = Math.floor(h/2);
+    renderer.setScissorTest(true);
+    renderer.setViewport(0, hh, w, h-hh); renderer.setScissor(0, hh, w, h-hh);
+    camera.aspect = w/(h-hh); camera.updateProjectionMatrix(); renderer.render(scene, camera);
+    renderer.setViewport(0, 0, w, hh); renderer.setScissor(0, 0, w, hh);
+    camera2.aspect = w/hh; camera2.updateProjectionMatrix(); renderer.render(scene, camera2);
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h);
+  } else {
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+  }
 }
 
 let last = performance.now();
@@ -2361,7 +2522,7 @@ function loop(now) {
     if (asRobot) { updateAsRobot(dt); updateFx(dt); updateRobotCamera(dt); }
     else {
       if (robot) updateRobot(dt);
-      updateTorch();
+      updateTorch(); updateTorch2();
       updateFx(dt);
       updateBarriers();
       updatePuddles(dt);
@@ -2396,7 +2557,7 @@ function loop(now) {
         : '🚨 Кого-то заметил';
     }
   }
-  renderer.render(scene, camera);
+  рисоватьКадр();
 }
 requestAnimationFrame(loop);
 
@@ -2414,6 +2575,7 @@ $('ctrlHint').textContent = isTouch
   ? 'Телефон: джойстик — идти, палец — камера. Тапни по товару — он в инвентаре, тапни по кассе — список и скан. 🔦 включает фонарик'
   : 'ПК: стрелки ↑↓←→ (как в Паучьем лабиринте) или WASD + мышь. Shift — бег, Пробел — прыжок. Клик по товару — взять, по кассе — список и скан. G — фонарик, F — толкнуть, Q — выбросить';
 $('startBtn').addEventListener('click', startGame);
+$('startBtn2').addEventListener('click', () => { вдвоём = true; asRobot = false; startGame(); });
 $('shopBtn').addEventListener('click', openShop);
 $('shopBack').addEventListener('click', closeShop);
 $('fsBtn').addEventListener('click', () => {
@@ -2423,6 +2585,16 @@ $('fsBtn').addEventListener('click', () => {
 
 window.__dbg = {
   get state(){ return state; },
+  // ── 👥 вдвоём ──
+  get coop(){ return вдвоём; },
+  get split(){ return document.body.classList.contains('coop'); },
+  guard(w){ const a = (w === 2 ? player2 : player); if (!a) return null;
+    return { x:+a.x.toFixed(1), z:+a.z.toFixed(1), h:+a.heading.toFixed(2) }; },
+  startCoop(){ вдвоём = true; asRobot = false; $('startBtn2').click(); return вдвоём; },
+  key(k, v){ keys[k] = !!v; return !!keys[k]; },
+  get pad2(){ const e = $('dpad2'); return !!e && getComputedStyle(e).display !== 'none'; },
+  get torch2(){ return torch2.intensity; },
+  night(){ closeStore(); return phase; },
   get player(){ return { x:player.x, z:player.z, y:player.y }; },
   get robot(){ return robot ? { x:robot.x, z:robot.z, mode:robot.mode, sucking:robot.sucking } : null; },
   get actors(){ return actors.length; },
@@ -2574,34 +2746,59 @@ window.__dbg = {
 
 <script>
 // Игра стартует МГНОВЕННО из памяти телефона и работает без интернета.
-// Если интернет есть — проверяем крошечный version.json (несколько байт) и,
-// если вышла новая версия, обновляемся сами.
+// Если интернет есть — проверяем крошечный version.json и обновляемся сами.
 (function () {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(function(){}));
   }
+  function баннер(текст) {
+    var d = document.getElementById('updBanner');
+    if (!d) { d = document.createElement('div'); d.id = 'updBanner';
+      d.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:99999;' +
+        'background:#0b1220ee;color:#7dd3fc;font:900 15px system-ui;padding:10px 18px;border-radius:14px;' +
+        'border:2px solid #7dd3fc55;box-shadow:0 8px 24px #0009';
+      document.body.appendChild(d); }
+    d.textContent = текст;
+    return d;
+  }
   async function applyUpdate() {
+    баннер('🔄 Обновляю игру…');
     try {
       const ks = await caches.keys();
       await Promise.all(ks.map(function (k) { return caches.delete(k); }));
       if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) await reg.unregister();
+        const rs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(rs.map(function (r) { return r.unregister(); }));
       }
     } catch (_) {}
-    location.reload();
+    // ⚠️ Простой location.reload() может взять СТАРЫЙ html из кэша браузера,
+    // и обновление «не приходит» (жалоба Марка 23.08). Перезагружаемся по новому адресу.
+    setTimeout(function () {
+      location.replace(location.pathname + '?v=' + Date.now());
+    }, 400);
   }
-  async function checkVersion() {
+  window.__forceUpdate = applyUpdate;
+  async function checkVersion(показать) {
     try {
       const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
-      if (!r.ok) return;
+      if (!r.ok) throw 0;
       const j = await r.json();
-      if (!j || !j.v || j.v === window.__APP_VER) return;
+      if (!j || !j.v) throw 0;
+      if (j.v === window.__APP_VER) { if (показать) { const d = баннер('✅ У тебя самая свежая версия');
+          setTimeout(function(){ d.remove(); }, 2500); } return false; }
       if (window.__onUpdate) window.__onUpdate(applyUpdate); else applyUpdate();
-    } catch (_) { /* нет интернета — играем офлайн, всё в порядке */ }
+      return true;
+    } catch (_) {
+      if (показать) { const d = баннер('📴 Нет интернета — обновить не выйдет');
+        setTimeout(function(){ d.remove(); }, 2500); }
+      return false;
+    }
   }
-  window.addEventListener('load', function () { setTimeout(checkVersion, 800); });
-  setInterval(checkVersion, 5 * 60 * 1000);
+  window.__checkUpdate = function () { return checkVersion(true); };
+  window.addEventListener('load', function () { setTimeout(checkVersion, 300); setTimeout(checkVersion, 3000); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) checkVersion(); });
+  addEventListener('online', checkVersion);
+  setInterval(checkVersion, 60 * 1000);
 })();
 </script>
 </body>
