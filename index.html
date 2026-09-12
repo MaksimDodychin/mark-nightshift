@@ -158,7 +158,7 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png">
   <meta name="msapplication-TileImage" content="icon-192.png">
   <meta name="msapplication-TileColor" content="#6b21a8">
-  <script>window.__APP_VER = "b8674b09c3";</script>
+  <script>window.__APP_VER = "9bdee8b291";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -349,7 +349,9 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 // 🎨 мягкие тени и киношная тонировка — как в остальных играх
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// 📱 на телефоне мягкие тени дорогие: там берём попроще и карту поменьше
+const слабоеЖелезо = matchMedia('(pointer:coarse)').matches;
+renderer.shadowMap.type = слабоеЖелезо ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 document.body.appendChild(renderer.domElement);
@@ -420,7 +422,7 @@ const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x3a3040, 0.9); scene.add(hemi)
 const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(10,30,10); scene.add(sun);
 // ☀️ солнце теперь бросает мягкую тень на весь зал
 sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.mapSize.set(слабоеЖелезо ? 512 : 1024, слабоеЖелезо ? 512 : 1024);
 sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
 sun.shadow.camera.top = 60;  sun.shadow.camera.bottom = -60;
 sun.shadow.camera.near = 1;  sun.shadow.camera.far = 90;
