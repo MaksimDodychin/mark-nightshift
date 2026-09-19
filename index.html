@@ -61,9 +61,10 @@
 
   #stick { position:fixed; left:16px; bottom:16px; width:118px; height:118px; z-index:20; border-radius:50%;
     background:#ffffff10; border:2px solid #ffffff2a; touch-action:none; display:none; }
-  /* ═══ 👥 ВДВОЁМ (заказ Марка 12.09.2026): сверху 1-й охранник, снизу 2-й ═══ */
-  body.coop #stick { left:12px; bottom:calc(50% + 12px); width:92px; height:92px; }
-  #dpad2 { position:fixed; left:12px; bottom:12px; z-index:20; display:none;
+  /* ═══ 👥 ВДВОЁМ ═══ ПРОСЬБА МАРКА 19.09.2026: делим экран ВЕРТИКАЛЬНО —
+     1-й игрок СЛЕВА, 2-й СПРАВА (раньше было сверху/снизу) */
+  body.coop #stick { left:12px; bottom:12px; width:92px; height:92px; }
+  #dpad2 { position:fixed; left:calc(50% + 12px); bottom:12px; z-index:20; display:none;
     grid-template-columns:repeat(3,48px); grid-template-rows:repeat(3,48px); gap:6px; touch-action:none; }
   body.coop #dpad2 { display:grid; }
   #dpad2 .d2 { display:flex; align-items:center; justify-content:center; font-size:20px; color:#fff;
@@ -71,15 +72,16 @@
     border-radius:12px; user-select:none; }
   #dpad2 .d2:active, #dpad2 .d2.on { transform:scale(.92); background:radial-gradient(circle at 35% 30%,#8a8ab0,#4a4a66); }
   #d2U{grid-column:2;grid-row:1} #d2L{grid-column:1;grid-row:2} #d2R{grid-column:3;grid-row:2} #d2D{grid-column:2;grid-row:3}
-  #splitLine { position:fixed; left:0; right:0; top:50%; height:4px; margin-top:-2px; z-index:19;
-    background:linear-gradient(90deg,#0000,#ffffffcc,#0000); display:none; pointer-events:none; }
+  #splitLine { position:fixed; top:0; bottom:0; left:50%; width:4px; margin-left:-2px; z-index:19;
+    background:linear-gradient(180deg,#0000,#ffffffcc,#0000); display:none; pointer-events:none; }
   body.coop #splitLine { display:block; }
   .coopTag { position:fixed; right:12px; z-index:19; display:none; background:#0e1b38cc;
     border:2px solid #ffffff33; border-radius:12px; padding:4px 10px; font-weight:900; font-size:14px; }
-  .coopTag { left:50%; transform:translateX(-50%); right:auto; }
-  .coopTag.p1 { top:calc(50% - 34px); border-color:#7CFC9B88; } .coopTag.p2 { top:calc(50% + 10px); border-color:#ffd34d88; }
+  .coopTag { transform:translateX(-50%); right:auto; }
+  .coopTag.p1 { left:25%; top:10px; border-color:#7CFC9B88; }
+  .coopTag.p2 { left:75%; top:10px; border-color:#ffd34d88; }
   body.coop .coopTag { display:block; }
-  body.coop #actions { bottom:calc(50% + 12px); }
+  body.coop #actions { bottom:16px; right:calc(50% + 14px); }
   #knob { position:absolute; left:50%; top:50%; width:52px; height:52px; margin:-26px 0 0 -26px; border-radius:50%;
     background:#ffffff44; border:2px solid #ffffff66; }
   #actions { position:fixed; right:14px; bottom:16px; z-index:20; display:flex; flex-direction:column; gap:10px; }
@@ -158,7 +160,7 @@
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon.png">
   <meta name="msapplication-TileImage" content="icon-192.png">
   <meta name="msapplication-TileColor" content="#6b21a8">
-  <script>window.__APP_VER = "a2ef46a27c";</script>
+  <script>window.__APP_VER = "d5df01b650";</script>
 </head>
 <body>
 <div id="err"></div>
@@ -2567,13 +2569,14 @@ function рисоватьКадр() {
   renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;
   if (вдвоём && player2 && !asRobot) {
     renderer.getSize(_раз);
-    const w = Math.floor(_раз.x), h = Math.floor(_раз.y), hh = Math.floor(h/2);
+    // 👥 левая половина — 1-й охранник, правая — 2-й (просьба Марка 19.09.2026)
+    const w = Math.floor(_раз.x), h = Math.floor(_раз.y), hw = Math.floor(w/2);
     renderer.setScissorTest(true);
-    renderer.setViewport(0, hh, w, h-hh); renderer.setScissor(0, hh, w, h-hh);
-    camera.aspect = w/(h-hh); camera.updateProjectionMatrix(); renderer.render(scene, camera);
-    renderer.setViewport(0, 0, w, hh); renderer.setScissor(0, 0, w, hh);
+    renderer.setViewport(0, 0, hw, h); renderer.setScissor(0, 0, hw, h);
+    camera.aspect = hw/h; camera.updateProjectionMatrix(); renderer.render(scene, camera);
+    renderer.setViewport(hw, 0, w-hw, h); renderer.setScissor(hw, 0, w-hw, h);
     renderer.shadowMap.needsUpdate=false;
-    camera2.aspect = w/hh; camera2.updateProjectionMatrix(); renderer.render(scene, camera2);
+    camera2.aspect = (w-hw)/h; camera2.updateProjectionMatrix(); renderer.render(scene, camera2);
     renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h);
   } else {
     camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
